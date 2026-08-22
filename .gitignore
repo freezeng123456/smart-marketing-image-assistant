@@ -8,3 +8,4 @@
 .runtime/
 debug-output/
 node_modules/
+.github/workflows/
