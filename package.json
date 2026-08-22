@@ -1,0 +1,19 @@
+{
+  "name": "smart-marketing-image-assistant",
+  "version": "1.1.0",
+  "private": true,
+  "type": "module",
+  "description": "面向营销人员的品牌 IP 智能营销生图助手，支持 Cloudflare Workers AI 真生图和多轮编辑",
+  "scripts": {
+    "dev": "node scripts/serve.mjs",
+    "dev:real": "node scripts/serve.mjs",
+    "start": "node scripts/serve.mjs",
+    "check": "node scripts/check-syntax.mjs && node --test tests/*.test.mjs",
+    "test": "node --test tests/*.test.mjs",
+    "test:cloudflare": "node scripts/test-cloudflare-live.mjs",
+    "share": "bash scripts/share-trycloudflare.sh"
+  },
+  "engines": {
+    "node": ">=20"
+  }
+}

@@ -1,0 +1,10 @@
+
+!.env.example
+# runtime / secrets / local
+*.log
+.DS_Store
+.env
+.env.*
+.runtime/
+debug-output/
+node_modules/

@@ -1,0 +1,405 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta
+      name="description"
+      content="输入营销需求，快速生成带品牌 IP 的营销海报，并支持多轮调整。"
+    />
+    <meta name="theme-color" content="#171a19" />
+    <title>智能营销生图助手</title>
+    <link rel="stylesheet" href="./styles.css" />
+  </head>
+  <body>
+    <header class="topbar">
+      <button class="brand" type="button" data-nav="create" aria-label="返回创建图片">
+        <span class="brand-mark" aria-hidden="true">
+          <svg viewBox="0 0 40 40" role="img">
+            <rect width="40" height="40" rx="11" fill="currentColor"></rect>
+            <path d="M20 7.5c.7 6.2 3.8 9.3 10 10-6.2.7-9.3 3.8-10 10-.7-6.2-3.8-9.3-10-10 6.2-.7 9.3-3.8 10-10Z" fill="white"></path>
+            <path d="M30.2 7.4c.25 2.25 1.35 3.35 3.6 3.6-2.25.25-3.35 1.35-3.6 3.6-.25-2.25-1.35-3.35-3.6-3.6 2.25-.25 3.35-1.35 3.6-3.6Z" fill="#ffe7a3"></path>
+          </svg>
+        </span>
+        <span class="brand-copy">
+          <strong>营销图片生成器</strong>
+          <small>Brand Creative Studio</small>
+        </span>
+      </button>
+
+      <nav class="main-nav" aria-label="主导航">
+        <button class="nav-item is-active" type="button" data-nav="create">创建图片</button>
+        <button class="nav-item" type="button" data-nav="history">生成历史</button>
+        <button class="nav-item" type="button" data-nav="portfolio">作品集</button>
+      </nav>
+
+      <div class="topbar-actions">
+        <span class="api-badge" id="api-mode-badge" title="当前接口模式">
+          <span class="status-dot"></span>
+          <span>接口检测中</span>
+        </span>
+      </div>
+    </header>
+
+    <main>
+      <section class="page-view is-active" id="create-view" data-view="create">
+        <div class="hero-shell">
+          <div class="hero-copy">
+            <p class="eyebrow">AI MARKETING CREATIVE</p>
+            <h1>智能营销生图助手</h1>
+            <p>输入营销需求，快速生成品牌营销视觉素材</p>
+          </div>
+          <div class="hero-actions">
+            <button class="button button-secondary" id="history-entry" type="button">
+              <span aria-hidden="true">◴</span>
+              历史记录
+            </button>
+            <button class="button button-primary" id="new-creation" type="button">
+              <span aria-hidden="true">＋</span>
+              新建创作
+            </button>
+          </div>
+        </div>
+
+        <div class="workspace-shell">
+          <section class="config-panel" aria-labelledby="creation-config-title">
+            <div class="panel-heading">
+              <div>
+                <p class="panel-kicker">CREATION BRIEF</p>
+                <h2 id="creation-config-title">创作配置</h2>
+              </div>
+              <button class="text-button" id="open-examples" type="button">查看示例</button>
+            </div>
+
+            <form id="generation-form" novalidate>
+              <div class="field-block field-block-prominent">
+                <div class="field-label-row">
+                  <label for="marketing-prompt">营销需求 <span class="required">*</span></label>
+                  <span id="prompt-count">0 / 3000</span>
+                </div>
+                <div class="prompt-wrap">
+                  <textarea
+                    id="marketing-prompt"
+                    rows="7"
+                    maxlength="3000"
+                    placeholder="例如：生成一张七夕主题的袋鼠活动海报，竖版 1080x1920，温暖粉色调，袋鼠手持玫瑰，背景有星河和爱心，预留标题和优惠信息区域"
+                  ></textarea>
+                  <div class="prompt-shortcut">Enter 提交 · Shift + Enter 换行</div>
+                </div>
+                <p class="field-hint">
+                  描述越具体，生成效果越贴近预期。建议说明主题、主体、动作、背景、色彩、比例和文字区域。
+                </p>
+                <p class="validation-message" id="prompt-error" role="alert"></p>
+              </div>
+
+              <div class="field-block">
+                <div class="field-label-row">
+                  <label>营销场景快捷模板</label>
+                  <span>点击后填入需求，不会立即提交</span>
+                </div>
+                <div class="template-grid" id="template-grid"></div>
+              </div>
+
+              <div class="field-block">
+                <div class="field-label-row">
+                  <label>品牌 IP 选择</label>
+                  <span>默认：品牌袋鼠</span>
+                </div>
+                <div class="option-card-grid option-card-grid-brand" id="brand-options"></div>
+                <div class="info-note">
+                  <span class="info-note-icon" aria-hidden="true">i</span>
+                  <span>选择「品牌袋鼠」时，系统会注入已审批的品牌袋鼠 IP 参考图（锁定外观），无需也不应另造一只不同的袋鼠。</span>
+                </div>
+              </div>
+
+              <div class="form-grid form-grid-two">
+                <div class="field-block compact-block">
+                  <div class="field-label-row"><label>生成类型</label></div>
+                  <div class="segmented" id="generation-types"></div>
+                </div>
+                <div class="field-block compact-block">
+                  <div class="field-label-row"><label>图片数量</label></div>
+                  <div class="segmented" id="image-counts"></div>
+                </div>
+              </div>
+
+              <div class="field-block">
+                <div class="field-label-row">
+                  <label>图片比例</label>
+                  <span id="size-preview">1080x1920</span>
+                </div>
+                <div class="ratio-grid" id="ratio-options"></div>
+                <div class="custom-size-row" id="custom-size-row" hidden>
+                  <label>
+                    宽度
+                    <input id="custom-width" type="number" min="320" max="4096" step="1" value="1080" />
+                  </label>
+                  <span>×</span>
+                  <label>
+                    高度
+                    <input id="custom-height" type="number" min="320" max="4096" step="1" value="1920" />
+                  </label>
+                  <small>支持 320–4096 px</small>
+                </div>
+              </div>
+
+              <div class="field-block">
+                <div class="field-label-row">
+                  <label>风格偏好</label>
+                  <span id="style-limit">已选 2 / 3</span>
+                </div>
+                <div class="pill-group" id="style-options"></div>
+              </div>
+
+              <div class="field-block">
+                <div class="field-label-row">
+                  <label>参考图上传</label>
+                  <span id="upload-count">0 / 4</span>
+                </div>
+                <div class="upload-zone" id="upload-zone" tabindex="0" role="button" aria-label="上传参考图">
+                  <input
+                    id="reference-input"
+                    type="file"
+                    accept="image/png,image/jpeg,image/webp"
+                    multiple
+                    hidden
+                  />
+                  <div class="upload-icon" aria-hidden="true">＋</div>
+                  <div>
+                    <strong>点击或拖拽上传参考图</strong>
+                    <p>支持 PNG、JPG、JPEG、WEBP；单张不超过 10MB；最多 4 张</p>
+                    <small>可上传商品图、场景参考图或构图参考图。品牌 IP 素材由系统统一管理。</small>
+                  </div>
+                </div>
+                <div class="reference-list" id="reference-list"></div>
+              </div>
+
+              <div class="submit-dock">
+                <div class="submit-summary" id="submit-summary">
+                  <span class="summary-dot"></span>
+                  <span>品牌袋鼠 · 9:16 · 2 张</span>
+                </div>
+                <button class="button button-generate" id="generate-button" type="submit">
+                  <span class="button-icon" aria-hidden="true">✦</span>
+                  <span class="button-label">开始生成</span>
+                </button>
+              </div>
+            </form>
+          </section>
+
+          <section class="creation-stage" aria-live="polite">
+            <div class="empty-stage" id="empty-stage">
+              <div class="stage-orbit" aria-hidden="true">
+                <div class="orbit-ring orbit-ring-one"></div>
+                <div class="orbit-ring orbit-ring-two"></div>
+                <div class="stage-kangaroo">K</div>
+                <span class="orbit-star orbit-star-one">✦</span>
+                <span class="orbit-star orbit-star-two">✧</span>
+                <span class="orbit-star orbit-star-three">•</span>
+              </div>
+              <p class="stage-eyebrow">READY TO CREATE</p>
+              <h2>把营销想法变成品牌视觉</h2>
+              <p>填写左侧创作配置后开始生成。任务提交、轮询、取消与多轮调整都将在当前页面完成。</p>
+              <div class="stage-feature-list">
+                <span>异步任务</span>
+                <span>品牌 IP 注入</span>
+                <span>多轮调整</span>
+                <span>版本留存</span>
+              </div>
+            </div>
+
+            <section class="progress-card" id="progress-card" hidden>
+              <div class="progress-head">
+                <div>
+                  <p class="panel-kicker">GENERATING</p>
+                  <h2>正在生成营销视觉</h2>
+                </div>
+                <span class="task-status-badge" id="task-status-badge">RUNNING</span>
+              </div>
+              <div class="progress-visual">
+                <div class="progress-ring" id="progress-ring">
+                  <span id="progress-number">0%</span>
+                </div>
+                <div class="progress-copy">
+                  <strong id="progress-message">正在提交任务...</strong>
+                  <p>任务采用异步执行，页面无需刷新。你可以切换到历史记录，当前状态仍会保留。</p>
+                </div>
+              </div>
+              <div class="progress-bar" aria-hidden="true"><span id="progress-bar-fill"></span></div>
+              <ol class="progress-steps" id="progress-steps"></ol>
+              <div class="partial-results" id="partial-results" hidden></div>
+              <div class="progress-actions">
+                <button class="button button-danger-ghost" id="cancel-task" type="button">取消生成</button>
+              </div>
+            </section>
+
+            <section class="error-card" id="error-card" hidden>
+              <div class="error-icon" aria-hidden="true">!</div>
+              <div>
+                <p class="panel-kicker">TASK NOTICE</p>
+                <h2 id="error-title">生成未完成</h2>
+                <p id="error-message"></p>
+                <div class="error-actions">
+                  <button class="button button-primary" id="retry-task" type="button">重新生成</button>
+                  <button class="button button-secondary" id="error-history" type="button">查看历史记录</button>
+                </div>
+              </div>
+            </section>
+
+            <section class="result-section" id="result-section" hidden>
+              <div class="result-heading">
+                <div>
+                  <p class="panel-kicker">CREATIVE OUTPUT</p>
+                  <h2>生成结果</h2>
+                  <p id="result-time">—</p>
+                </div>
+                <div class="result-meta" id="result-meta"></div>
+              </div>
+
+              <div class="image-grid" id="image-grid"></div>
+
+              <section class="adjustment-card" id="adjustment-card">
+                <div class="adjustment-heading">
+                  <div class="adjustment-spark" aria-hidden="true">✦</div>
+                  <div>
+                    <p class="panel-kicker">CONTINUE REFINING</p>
+                    <h3>继续调整</h3>
+                    <p>如果需要调整袋鼠的姿势、背景细节、色彩倾向或构图比例，随时告诉我～</p>
+                  </div>
+                </div>
+                <div class="adjustment-pills" id="adjustment-pills"></div>
+                <div class="custom-adjustment" id="custom-adjustment">
+                  <textarea
+                    id="adjustment-input"
+                    rows="3"
+                    placeholder="描述你想调整的内容，例如：把袋鼠改成奔跑姿势，背景换成海边日落……"
+                  ></textarea>
+                  <div class="custom-adjustment-footer">
+                    <div class="adjustment-examples" id="adjustment-examples"></div>
+                    <button class="button button-primary" id="submit-adjustment" type="button">提交调整</button>
+                  </div>
+                </div>
+              </section>
+
+              <section class="version-section" id="version-section">
+                <div class="section-title-row">
+                  <div>
+                    <p class="panel-kicker">VERSION HISTORY</p>
+                    <h3>当前会话版本</h3>
+                  </div>
+                  <span id="session-id-display"></span>
+                </div>
+                <div class="version-strip" id="version-strip"></div>
+              </section>
+            </section>
+          </section>
+        </div>
+      </section>
+
+      <section class="page-view" id="history-view" data-view="history" hidden>
+        <div class="content-shell">
+          <div class="page-heading-row">
+            <div>
+              <p class="eyebrow">GENERATION HISTORY</p>
+              <h1>生成历史</h1>
+              <p>查看过去的生成任务，加载同一 sessionId 并继续多轮编辑。</p>
+            </div>
+            <button class="button button-primary" type="button" data-nav="create">＋ 新建创作</button>
+          </div>
+          <div class="history-toolbar">
+            <div class="search-box">
+              <span aria-hidden="true">⌕</span>
+              <input id="history-search" type="search" placeholder="搜索任务名称、主题或品牌 IP" />
+            </div>
+            <select id="history-status-filter" aria-label="按状态筛选">
+              <option value="all">全部状态</option>
+              <option value="DONE">已完成</option>
+              <option value="RUNNING">生成中</option>
+              <option value="FAILED">失败</option>
+              <option value="TIMEOUT">超时</option>
+              <option value="ABORTED">已取消</option>
+            </select>
+          </div>
+          <div class="history-grid" id="history-grid"></div>
+          <div class="empty-list" id="history-empty" hidden>
+            <div>◴</div>
+            <h2>还没有生成记录</h2>
+            <p>完成第一张营销海报后，会话、版本和状态会保存在这里。</p>
+          </div>
+        </div>
+      </section>
+
+      <section class="page-view" id="portfolio-view" data-view="portfolio" hidden>
+        <div class="content-shell">
+          <div class="page-heading-row portfolio-heading">
+            <div>
+              <p class="eyebrow">PORTFOLIO</p>
+              <h1>作品集</h1>
+              <p>按营销场景整理已完成的品牌视觉作品。</p>
+            </div>
+            <span id="portfolio-updated">最后更新：—</span>
+          </div>
+          <section class="portfolio-folders-section">
+            <div class="section-title-row">
+              <h2>项目文件夹</h2>
+              <span id="folder-count">0 个项目</span>
+            </div>
+            <div class="folder-grid" id="folder-grid"></div>
+          </section>
+          <section class="portfolio-works-section">
+            <div class="section-title-row">
+              <h2>全部作品</h2>
+              <span id="work-count">0 个作品</span>
+            </div>
+            <div class="portfolio-filter" id="portfolio-filter"></div>
+            <div class="portfolio-grid" id="portfolio-grid"></div>
+          </section>
+        </div>
+      </section>
+    </main>
+
+    <div class="modal-backdrop" id="example-modal" hidden>
+      <section class="modal example-modal-card" role="dialog" aria-modal="true" aria-labelledby="example-title">
+        <header class="modal-header">
+          <div>
+            <p class="panel-kicker">PROMPT GUIDE</p>
+            <h2 id="example-title">生成示例参考</h2>
+          </div>
+          <button class="icon-button" type="button" data-close-modal="example-modal" aria-label="关闭">×</button>
+        </header>
+        <div class="example-tabs" id="example-tabs"></div>
+        <div class="example-content" id="example-content"></div>
+      </section>
+    </div>
+
+    <div class="modal-backdrop" id="detail-modal" hidden>
+      <section class="modal detail-modal-card" role="dialog" aria-modal="true" aria-labelledby="detail-title">
+        <header class="modal-header">
+          <div>
+            <p class="panel-kicker">SESSION DETAIL</p>
+            <h2 id="detail-title">会话详情</h2>
+          </div>
+          <button class="icon-button" type="button" data-close-modal="detail-modal" aria-label="关闭">×</button>
+        </header>
+        <div id="detail-content"></div>
+      </section>
+    </div>
+
+    <div class="modal-backdrop lightbox-backdrop" id="lightbox-modal" hidden>
+      <section class="lightbox" role="dialog" aria-modal="true" aria-label="图片预览">
+        <button class="icon-button lightbox-close" type="button" data-close-modal="lightbox-modal" aria-label="关闭">×</button>
+        <button class="lightbox-arrow lightbox-prev" id="lightbox-prev" type="button" aria-label="上一张">‹</button>
+        <div class="lightbox-canvas">
+          <img id="lightbox-image" alt="生成图片大图预览" />
+          <div class="lightbox-meta" id="lightbox-meta"></div>
+        </div>
+        <button class="lightbox-arrow lightbox-next" id="lightbox-next" type="button" aria-label="下一张">›</button>
+      </section>
+    </div>
+
+    <div class="toast-region" id="toast-region" aria-live="polite" aria-atomic="true"></div>
+
+    <script src="./config.js"></script>
+    <script type="module" src="./src/app.js"></script>
+  </body>
+</html>

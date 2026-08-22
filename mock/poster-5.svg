@@ -1,0 +1,40 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1080" height="1920" viewBox="0 0 1080 1920">
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="1" y2="1"><stop stop-color="#FF7657"/><stop offset="1" stop-color="#4F86F7"/></linearGradient>
+    <filter id="shadow" x="-30%" y="-30%" width="160%" height="160%"><feDropShadow dx="0" dy="28" stdDeviation="35" flood-color="#000" flood-opacity=".25"/></filter>
+    <linearGradient id="glass" x1="0" y1="0" x2="0" y2="1"><stop stop-color="#fff" stop-opacity=".24"/><stop offset="1" stop-color="#fff" stop-opacity=".06"/></linearGradient>
+  </defs>
+  <rect width="1080" height="1920" fill="url(#bg)"/>
+  <rect x="45" y="45" width="990" height="1830" rx="56" fill="none" stroke="#fff" stroke-opacity=".24" stroke-width="3"/>
+  <circle cx="820" cy="620" r="220" fill="#FFD875" opacity=".8"/><path d="M0 1280 Q260 1190 540 1290 T1080 1260 V1920 H0Z" fill="#2B5EB4" opacity=".78"/><path d="M0 1370 Q260 1270 540 1380 T1080 1340" fill="none" stroke="#D8F4FF" stroke-width="18" opacity=".55"/><g fill="#25365F" opacity=".7"><path d="M110 930 q60-55 120 0 q-60-30-120 0Z"/><path d="M260 820 q50-45 100 0 q-50-25-100 0Z"/></g>
+  <g font-family="Inter, PingFang SC, Microsoft YaHei, sans-serif" fill="#fff">
+    <rect x="92" y="92" width="250" height="64" rx="32" fill="url(#glass)" stroke="#fff" stroke-opacity=".25"/>
+    <text x="217" y="136" text-anchor="middle" font-size="28" font-weight="700" letter-spacing="4">BRAND CREATIVE</text>
+    <text x="540" y="270" text-anchor="middle" font-size="88" font-weight="900" letter-spacing="6">海边日落企划</text>
+    <text x="540" y="340" text-anchor="middle" font-size="31" font-weight="600" opacity=".9" letter-spacing="3">品牌袋鼠 · 夏日漫游</text>
+  </g>
+  <g filter="url(#shadow)">
+    <g stroke="#2F315D" stroke-width="30" stroke-linecap="round" stroke-linejoin="round">
+      <path d="M650 1290 Q865 1285 925 1435 Q835 1392 732 1412" fill="none" stroke-width="58"/>
+      <ellipse cx="540" cy="1260" rx="220" ry="310" fill="#FFE4A8"/>
+      <ellipse cx="540" cy="820" rx="190" ry="205" fill="#FFE4A8"/>
+      <path d="M450 650 Q385 360 455 245 Q535 425 520 650" fill="#FFE4A8"/>
+      <path d="M570 650 Q605 365 685 280 Q705 470 635 690" fill="#FFE4A8"/>
+      <ellipse cx="475" cy="805" rx="25" ry="32" fill="#2F315D" stroke="none"/>
+      <ellipse cx="600" cy="805" rx="25" ry="32" fill="#2F315D" stroke="none"/>
+      <path d="M520 860 Q540 885 560 860" fill="none" stroke-width="16"/>
+      <path d="M490 930 Q540 978 595 928" fill="none" stroke-width="18"/>
+      <ellipse cx="540" cy="1310" rx="120" ry="160" fill="#FFF0C9" opacity=".72" stroke="none"/>
+      <path d="M430 1040 Q330 1110 300 1210"/><path d="M650 1040 Q760 930 780 790"/><circle cx="785" cy="765" r="25" fill="#FFE4A8" stroke="none"/>
+      <path d="M450 1500 Q405 1630 360 1720"/>
+      <path d="M625 1500 Q680 1625 735 1715"/>
+      <path d="M320 1730 Q390 1700 440 1735"/>
+      <path d="M690 1730 Q750 1698 810 1735"/>
+    </g></g>
+  <g font-family="Inter, PingFang SC, Microsoft YaHei, sans-serif">
+    <rect x="120" y="1640" width="840" height="140" rx="42" fill="#2F315D" opacity=".78"/>
+    <text x="540" y="1710" text-anchor="middle" fill="#fff" font-size="42" font-weight="800" letter-spacing="4">一起出发  记录好心情</text>
+    <text x="540" y="1758" text-anchor="middle" fill="#fff" font-size="22" opacity=".72" letter-spacing="3">预留活动标题 · 优惠信息 · 行动入口</text>
+  </g>
+  <text x="540" y="1840" text-anchor="middle" fill="#fff" opacity=".68" font-family="Inter, sans-serif" font-size="18" letter-spacing="5">SMART MARKETING IMAGE ASSISTANT</text>
+</svg>
