@@ -1,8 +1,17 @@
-function buildPrompt(request) {
+import { readFile } from "node:fs/promises";
+import { fileURLToPath } from "node:url";
+import { inferImageMime } from "./image-utils.mjs";
+
+const BRAND_KANGAROO_PATH = fileURLToPath(new URL("../assets/brand-kangaroo.png", import.meta.url));
+const BRAND_SIDE_PATH = fileURLToPath(new URL("../assets/brand-ip/side-profile-clean.png", import.meta.url));
+const BRAND_STAND_PATH = fileURLToPath(new URL("../assets/brand-ip/meituan-stand-official.png", import.meta.url));
+
+function buildPrompt(request, { hasBrandRef = false } = {}) {
   const styles = Array.isArray(request.styles) && request.styles.length ? request.styles.join(", ") : "commercial marketing";
   const original = String(request.prompt || "").trim();
-  const brand =
-    !request.brandAsset || request.brandAsset === "brand-kangaroo"
+  const brand = hasBrandRef
+    ? "Hero must match the reference image exactly: 美团黄色袋鼠 / Meituan yellow kangaroo IP, side or 3/4 profile, bright yellow smooth vinyl, cream belly pouch, long rounded ears, small black oval eye separate from solid black oval nose, thick all-yellow tapering tail, matte vinyl toy look. Keep identity; change only pose and scene for the campaign."
+    : !request.brandAsset || request.brandAsset === "brand-kangaroo"
       ? "Hero: Meituan yellow kangaroo IP, side/3-4 profile, bright yellow vinyl, cream belly pouch, small black oval eye, separate black oval nose, thick yellow tail."
       : "";
   return [`Brief: ${original}`, brand, `Styles: ${styles}. Full-bleed commercial poster.`].filter(Boolean).join("\n");
@@ -15,20 +24,83 @@ function pickSize(size) {
   return "768x1024";
 }
 
+async function toDataUri(buffer, mimeHint = "") {
+  const mime = /^image\//.test(mimeHint) ? mimeHint : inferImageMime(buffer, "image/png");
+  return `data:${mime};base64,${buffer.toString("base64")}`;
+}
+
 export function createSiliconFlowProvider({
   apiKey = process.env.SILICONFLOW_API_KEY || "",
   model = process.env.SILICONFLOW_IMAGE_MODEL || "Kwai-Kolors/Kolors",
   apiBase = process.env.SILICONFLOW_API_BASE || "https://api.siliconflow.cn/v1/images/generations",
+  brandRefPreference = process.env.SILICONFLOW_BRAND_REF || "side",
+  loadImageSource,
   fetchImpl = globalThis.fetch,
   logger = console
 } = {}) {
   if (!apiKey) throw new Error("SILICONFLOW_API_KEY is required.");
   if (typeof fetchImpl !== "function") throw new Error("A fetch implementation is required.");
 
+  async function resolveBrandRef(request, { signal } = {}) {
+    const useBrand = !request.brandAsset || request.brandAsset === "brand-kangaroo";
+    if (!useBrand) return null;
+
+    // Prefer an explicit user reference if they uploaded one as the subject.
+    const userRefs = Array.isArray(request.referenceImages) ? request.referenceImages.filter(Boolean) : [];
+    if (userRefs.length && typeof loadImageSource === "function") {
+      try {
+        const loaded = await loadImageSource(userRefs[0], { signal });
+        return await toDataUri(loaded.buffer, loaded.mime);
+      } catch (error) {
+        logger.warn?.(`[SiliconFlow] user reference failed: ${error.message}`);
+      }
+    }
+
+    const preferred =
+      brandRefPreference === "stand"
+        ? BRAND_STAND_PATH
+        : brandRefPreference === "primary"
+          ? BRAND_KANGAROO_PATH
+          : BRAND_SIDE_PATH;
+    const fallbacks = [preferred, BRAND_SIDE_PATH, BRAND_KANGAROO_PATH, BRAND_STAND_PATH];
+    for (const path of fallbacks) {
+      try {
+        const buffer = await readFile(path);
+        return await toDataUri(buffer, inferImageMime(buffer, "image/png"));
+      } catch {
+        // try next
+      }
+    }
+    return null;
+  }
+
   async function generate(request, index = 0, { signal } = {}) {
-    const prompt = buildPrompt(request);
+    const image = await resolveBrandRef(request, { signal });
+    const prompt = buildPrompt(request, { hasBrandRef: Boolean(image) });
     const image_size = pickSize(request.size);
-    logger.info?.(`[SiliconFlow] generating ${image_size} via ${model}`);
+    logger.info?.(`[SiliconFlow] generating ${image_size} via ${model}${image ? " (img2img brand ref)" : " (text-only)"}`);
+
+    const body = {
+      model,
+      prompt,
+      image_size,
+      batch_size: 1,
+      num_inference_steps: Number(process.env.SILICONFLOW_STEPS || 28),
+      guidance_scale: Number(process.env.SILICONFLOW_GUIDANCE || 7.5),
+      seed: (Date.now() + index * 9973) % 9999999999
+    };
+    if (image) body.image = image;
+
+    // Optional edit of current poster when adjusting.
+    if (!image && request.contextImageUrl && typeof loadImageSource === "function") {
+      try {
+        const current = await loadImageSource(request.contextImageUrl, { signal });
+        body.image = await toDataUri(current.buffer, current.mime);
+      } catch (error) {
+        logger.warn?.(`[SiliconFlow] context image skipped: ${error.message}`);
+      }
+    }
+
     const response = await fetchImpl(apiBase, {
       method: "POST",
       signal,
@@ -37,12 +109,7 @@ export function createSiliconFlowProvider({
         "Content-Type": "application/json",
         Accept: "application/json"
       },
-      body: JSON.stringify({
-        model,
-        prompt,
-        image_size,
-        seed: (Date.now() + index * 9973) % 9999999999
-      })
+      body: JSON.stringify(body)
     });
     const payload = await response.json().catch(() => ({}));
     if (!response.ok) {

@@ -4,8 +4,8 @@ import { mkdir, stat, writeFile } from "node:fs/promises";
 import { extname, join, normalize, relative } from "node:path";
 import { createCloudflareProvider } from "./cloudflare-provider.mjs";
 import { createPollinationsProvider, createFailoverProvider } from "./pollinations-provider.mjs";
-import { createFalProvider } from "./fal-provider.mjs";
 import { createSiliconFlowProvider } from "./siliconflow-provider.mjs";
+import { createModelScopeProvider } from "./modelscope-provider.mjs";
 import { createHuggingFaceProvider } from "./huggingface-provider.mjs";
 import { mimeFromFileName } from "./image-utils.mjs";
 import { createImageSourceLoader } from "./source-loader.mjs";
@@ -170,13 +170,13 @@ export async function createMarketingServer({
   function buildFallbackChain(logger) {
     const providers = [];
     if (process.env.SILICONFLOW_API_KEY) {
-      try { providers.push(createSiliconFlowProvider({ logger })); } catch (e) { logger.warn?.(`[provider] siliconflow skipped: ${e.message}`); }
+      try { providers.push(createSiliconFlowProvider({ loadImageSource, logger })); } catch (e) { logger.warn?.(`[provider] siliconflow skipped: ${e.message}`); }
+    }
+    if (process.env.MODELSCOPE_API_TOKEN || process.env.MODELSCOPE_API_KEY) {
+      try { providers.push(createModelScopeProvider({ logger })); } catch (e) { logger.warn?.(`[provider] modelscope skipped: ${e.message}`); }
     }
     if (process.env.HF_TOKEN || process.env.HUGGINGFACE_API_KEY) {
       try { providers.push(createHuggingFaceProvider({ logger })); } catch (e) { logger.warn?.(`[provider] huggingface skipped: ${e.message}`); }
-    }
-    if (process.env.FAL_KEY) {
-      try { providers.push(createFalProvider({ logger })); } catch (e) { logger.warn?.(`[provider] fal skipped: ${e.message}`); }
     }
     try { providers.push(createPollinationsProvider({ logger })); } catch (e) { logger.warn?.(`[provider] pollinations skipped: ${e.message}`); }
     if (!providers.length) return null;
