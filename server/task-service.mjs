@@ -62,10 +62,19 @@ export function createTaskService({ provider, runtimeDir, logger = console, task
   }
 
   async function runTask(task) {
+    const plannedSlots = Array.isArray(task.request.resourceSlots) && task.request.resourceSlots.length
+      ? task.request.resourceSlots.slice(0, 4)
+      : null;
+    const plannedCount = plannedSlots ? plannedSlots.length : 1;
+    // Multi-slot runs sequentially; give each slot enough time (default 3min each, cap 12min).
+    const effectiveTimeoutMs = Math.min(
+      Number(process.env.TASK_TIMEOUT_MAX_MS) || 720_000,
+      Math.max(taskTimeoutMs, taskTimeoutMs * plannedCount)
+    );
     const timeout = setTimeout(() => {
       task.timeoutTriggered = true;
       task.controller?.abort(new Error("task-timeout"));
-    }, taskTimeoutMs);
+    }, effectiveTimeoutMs);
 
     try {
       updateTask(task, {
@@ -73,10 +82,8 @@ export function createTaskService({ provider, runtimeDir, logger = console, task
         progress: 12,
         content: stageContent(12)
       });
-      const slots = Array.isArray(task.request.resourceSlots) && task.request.resourceSlots.length
-        ? task.request.resourceSlots.slice(0, 4)
-        : null;
-      const count = slots ? slots.length : 1;
+      const slots = plannedSlots;
+      const count = plannedCount;
       const images = [];
 
       for (let index = 0; index < count; index += 1) {
@@ -150,10 +157,24 @@ export function createTaskService({ provider, runtimeDir, logger = console, task
           error: "任务已取消"
         });
       } else if (task.timeoutTriggered) {
-        updateTask(task, {
-          status: "TIMEOUT",
-          error: "本次生成等待时间较长，任务已超时。"
-        });
+        const partial = Array.isArray(task.images) ? task.images : [];
+        if (partial.length) {
+          // Keep finished slots instead of discarding the whole multi-select run.
+          updateTask(task, {
+            status: "DONE",
+            progress: 100,
+            content: `已生成 ${partial.length} 张，其余资源位超时未完成，可单独再生成。`,
+            images: partial,
+            watermark: "图片由智能营销生图助手生成",
+            partialTimeout: true,
+            completedAt: new Date().toISOString()
+          });
+        } else {
+          updateTask(task, {
+            status: "TIMEOUT",
+            error: "本次生成等待时间较长，任务已超时。"
+          });
+        }
       } else {
         logger.error?.("[image-task]", error);
         updateTask(task, {
