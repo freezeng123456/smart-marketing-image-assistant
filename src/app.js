@@ -335,14 +335,7 @@ function setupSectionSpy() {
 }
 
 function setApiBadge() {
-  const isMock = api.mode === "mock";
-  els.apiBadge.innerHTML = `
-    <span class="status-dot" style="background:${isMock ? "var(--warning)" : "var(--success)"}"></span>
-    <span>${isMock ? "Mock 预览模式" : "NoCode Function"}</span>
-  `;
-  els.apiBadge.title = isMock
-    ? "本地预览使用浏览器内 mock；生产环境默认调用真实 NoCode Function"
-    : "正在调用真实 NoCode Function：/functions/*";
+  // API mode badge removed from UI
 }
 
 
