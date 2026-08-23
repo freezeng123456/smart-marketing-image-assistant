@@ -14,11 +14,38 @@ function buildPrompt(request, { hasRef = false, userCount = 0, collage = false }
   return [`Brief: ${original}`, brand, scene, followRef, `Styles: ${styles}. Full-bleed commercial poster.`].filter(Boolean).join("\n");
 }
 
-function pickSize(size) {
-  const raw = String(size || "768x1024");
-  const allowed = new Set(["512x512", "768x1024", "1024x768", "576x1024", "1024x576", "1024x1024"]);
-  if (allowed.has(raw)) return raw;
-  return "768x1024";
+const SILICONFLOW_ALLOWED_SIZES = [
+  "512x512",
+  "768x1024",
+  "1024x768",
+  "576x1024",
+  "1024x576",
+  "1024x1024"
+];
+
+/** Map any WxH request to the SiliconFlow size with the closest aspect ratio. */
+export function pickSize(size) {
+  const raw = String(size || "768x1024").trim();
+  if (SILICONFLOW_ALLOWED_SIZES.includes(raw)) return raw;
+
+  const match = /^(\d+)\s*[xX×]\s*(\d+)$/.exec(raw);
+  if (!match) return "768x1024";
+  const tw = Number(match[1]);
+  const th = Number(match[2]);
+  if (!Number.isFinite(tw) || !Number.isFinite(th) || tw <= 0 || th <= 0) return "768x1024";
+
+  const targetRatio = tw / th;
+  let best = SILICONFLOW_ALLOWED_SIZES[0];
+  let bestDiff = Infinity;
+  for (const candidate of SILICONFLOW_ALLOWED_SIZES) {
+    const [w, h] = candidate.split("x").map(Number);
+    const diff = Math.abs(w / h - targetRatio);
+    if (diff < bestDiff) {
+      bestDiff = diff;
+      best = candidate;
+    }
+  }
+  return best;
 }
 
 export function createSiliconFlowProvider({

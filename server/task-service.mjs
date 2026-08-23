@@ -1,6 +1,6 @@
 import { mkdir, readFile, writeFile } from "node:fs/promises";
 import { join } from "node:path";
-import { imageFileName } from "./image-utils.mjs";
+import { imageFileName, fitToExactSize } from "./image-utils.mjs";
 
 function uid(prefix) {
   return `${prefix}-${crypto.randomUUID()}`;
@@ -101,10 +101,21 @@ export function createTaskService({ provider, runtimeDir, logger = console, task
           index,
           { signal: task.controller.signal }
         );
-        const fileName = imageFileName(index, result.mime);
+        let outBuffer = result.buffer;
+        let outMime = result.mime;
+        if (slot?.width && slot?.height) {
+          const fitted = await fitToExactSize(outBuffer, {
+            width: slot.width,
+            height: slot.height,
+            mime: outMime
+          });
+          outBuffer = fitted.buffer;
+          outMime = fitted.mime;
+        }
+        const fileName = imageFileName(index, outMime);
         const taskDir = join(generatedDir, task.taskId);
         await mkdir(taskDir, { recursive: true });
-        await writeFile(join(taskDir, fileName), result.buffer);
+        await writeFile(join(taskDir, fileName), outBuffer);
         const url = `/generated/${task.taskId}/${fileName}`; // relative: survives http tunnels & host changes
         images.push({
           id: `${task.taskId}-image-${index + 1}`,
