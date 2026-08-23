@@ -57,9 +57,16 @@ export function createImageSourceLoader({ projectRoot, runtimeDir, fetchImpl = g
   }
 
   return async function loadImageSource(source, { signal } = {}) {
-    const value = String(source || "").trim();
+    // Clients may pass a string URL or an upload/demo object { url, previewUrl }.
+    const raw =
+      source && typeof source === "object"
+        ? String(source.url || source.previewUrl || source.href || "").trim()
+        : String(source || "").trim();
+    if (!raw) throw new Error("Reference image URL is empty.");
+    if (raw.startsWith("data:image/")) return decodeDataUri(raw);
+    // Cache-busting query (?v=6) must not become part of the filesystem path.
+    const value = raw.split("#")[0].split("?")[0].trim();
     if (!value) throw new Error("Reference image URL is empty.");
-    if (value.startsWith("data:image/")) return decodeDataUri(value);
     const allowedRoots = [projectRoot, runtimeDir];
     if (value.startsWith("file:")) {
       const path = fileURLToPath(value);
@@ -93,11 +100,12 @@ export function createImageSourceLoader({ projectRoot, runtimeDir, fetchImpl = g
 
     let url;
     try {
-      url = new URL(value, "http://local.invalid");
+      // Keep query for remote fetch; local path branches above already use stripped value.
+      url = new URL(raw, "http://local.invalid");
     } catch {
       throw new Error("Reference image URL is invalid.");
     }
-    const pathname = decodeURIComponent(url.pathname);
+    const pathname = decodeURIComponent(url.pathname).split("?")[0];
     if (pathname.startsWith("/generated/")) {
       const path = safeJoin(generatedDir, pathname.slice("/generated/".length));
       if (!path) throw new Error("Generated image path is invalid.");

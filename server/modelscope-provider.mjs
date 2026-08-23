@@ -79,7 +79,11 @@ export function createModelScopeProvider({
 
     const image = refs.singleImageUri;
     const needsImg2Img = requireImg2Img && (shouldUseBrandKangaroo(request) || (Array.isArray(request.referenceImages) && request.referenceImages.length));
-    if (needsImg2Img && !image) throw new Error("ModelScope img2img requires brand or user reference image.");
+    if (needsImg2Img && !image) {
+      throw new Error(
+        "图生图需要参考图，但参考图未能加载（请重新上传，或检查演示资源路径）。"
+      );
+    }
 
     logger.info?.(
       `[ModelScope] generating ${width}x${height} via ${activeModel} (${refs.mode}, userRefs=${refs.userCount}, hasImage=${Boolean(image)}, imageChars=${image ? image.length : 0})`

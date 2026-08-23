@@ -125,6 +125,10 @@ export async function resolveBrandAndUserRefs(request, { loadImageSource, signal
     }
   }
 
+  if (userSources.length && !userLoaded.length) {
+    logger?.warn?.(`[refs] all ${userSources.length} user reference(s) failed to load`);
+  }
+
   let brand = null;
   if (useBrand) brand = await loadBrandBuffer();
 

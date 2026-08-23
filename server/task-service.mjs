@@ -66,10 +66,19 @@ export function createTaskService({ provider, runtimeDir, logger = console, task
       ? task.request.resourceSlots.slice(0, 4)
       : null;
     const plannedCount = plannedSlots ? plannedSlots.length : 1;
-    // Slots run in parallel; timeout needs one-slot headroom, not N× serial time.
+    // Img2Img multi-slot runs serially → need N× headroom; light parallel jobs need ~1.35×.
+    const earlyHeavy =
+      (Array.isArray(task.request?.referenceImages) && task.request.referenceImages.length > 0) ||
+      task.request?.brandAsset === "brand-kangaroo" ||
+      /美团|美團|meituan|品牌袋鼠/i.test(String(task.request?.prompt || ""));
     const effectiveTimeoutMs = Math.min(
       Number(process.env.TASK_TIMEOUT_MAX_MS) || 720_000,
-      Math.max(taskTimeoutMs, Math.round(taskTimeoutMs * (plannedCount > 1 ? 1.35 : 1)))
+      Math.max(
+        taskTimeoutMs,
+        earlyHeavy && plannedCount > 1
+          ? taskTimeoutMs * plannedCount
+          : Math.round(taskTimeoutMs * (plannedCount > 1 ? 1.35 : 1))
+      )
     );
     const timeout = setTimeout(() => {
       task.timeoutTriggered = true;
@@ -95,15 +104,22 @@ export function createTaskService({ provider, runtimeDir, logger = console, task
         return { index, slot, slotSize, slotLabel };
       });
 
+      const hasRefs = Array.isArray(task.request.referenceImages) && task.request.referenceImages.length > 0;
+      const heavyImg2Img =
+        hasRefs ||
+        task.request.brandAsset === "brand-kangaroo" ||
+        /美团|美團|meituan|品牌袋鼠/i.test(String(task.request.prompt || ""));
+      // Free Render OOMs easily with parallel Qwen-Edit + refs; run those slots one-by-one.
+      const parallel = count > 1 && !heavyImg2Img;
+
       updateTask(task, {
         progress: 30,
         content: count > 1
-          ? `正在并行生成 ${count} 个资源位...`
+          ? (parallel ? `正在并行生成 ${count} 个资源位...` : `正在依次生成 ${count} 个资源位（图生图串行更稳）...`)
           : (slotJobs[0]?.slotLabel ? `正在生成 ${slotJobs[0].slotLabel}...` : "正在调用生图模型...")
       });
 
-      const settled = await Promise.allSettled(
-        slotJobs.map(async ({ index, slot, slotSize, slotLabel }) => {
+      const runSlot = async ({ index, slot, slotSize, slotLabel }) => {
           if (task.aborted) throw new DOMException("Aborted", "AbortError");
           const result = await provider.generate(
             {
@@ -129,19 +145,31 @@ export function createTaskService({ provider, runtimeDir, logger = console, task
             size: slotSize,
             slotLabel: slot?.label || ""
           };
-          // Publish partials as each slot finishes (order by slot index).
           images[index] = image;
           const ready = images.filter(Boolean);
           updateTask(task, {
             images: ready,
             progress: Math.min(92, 35 + Math.round((ready.length / count) * 55)),
             content: ready.length < count
-              ? `已完成 ${ready.length}/${count}（刚完成：${slotLabel}），其余并行生成中...`
+              ? `已完成 ${ready.length}/${count}（刚完成：${slotLabel}），继续生成中...`
               : "正在进行内容安全审核..."
           });
           return image;
-        })
-      );
+      };
+
+      let settled;
+      if (parallel) {
+        settled = await Promise.allSettled(slotJobs.map((job) => runSlot(job)));
+      } else {
+        settled = [];
+        for (const job of slotJobs) {
+          try {
+            settled.push({ status: "fulfilled", value: await runSlot(job) });
+          } catch (reason) {
+            settled.push({ status: "rejected", reason });
+          }
+        }
+      }
 
       if (task.aborted) throw new DOMException("Aborted", "AbortError");
       if (task.timeoutTriggered) throw new Error("task-timeout");
@@ -254,7 +282,8 @@ export function createTaskService({ provider, runtimeDir, logger = console, task
       return {
         _action: "notify_failed",
         status: "FAILED",
-        error: "任务不存在、已过期或会话标识不匹配。"
+        error:
+          "任务不存在或服务已重启（Render 免费实例闲置会休眠/重载）。请重新生成；多资源位并行较耗时，更容易碰到这个问题。"
       };
     }
     if (task.status === "DONE") {
