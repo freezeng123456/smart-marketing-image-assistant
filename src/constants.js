@@ -7,14 +7,14 @@ export const DEFAULT_CASES = [
     label: "Shopee 参考图改版",
     blurb: "上传/带参考图做大促改版。",
     prompt:
-      "根据参考图做一张电商大促海报，保留原有橙色主色、Shopee 标识、主标题数字和商品元素，改成竖版 9:16 适合手机的构图，预留促销文案区。",
-    ratio: "9:16",
-    size: "1080x1920",
-    selectedSlots: [{ id: "splash", label: "开屏广告", width: 1080, height: 1920 }],
+      "根据参考图做一张电商大促海报，保留原有橙色主色、Shopee 标识、主标题数字和商品元素，改成横版适合信息流的构图，预留促销文案区。",
+    ratio: "16:9",
+    size: "1920x1080",
+    selectedSlots: [{ id: "feed-h", label: "信息流横图", width: 1920, height: 1080 }],
     modelId: "modelscope-qwen-edit",
     brandAsset: "none",
-    resultUrl: "/assets/demo/shopee-result.webp?v=6",
-    thumbUrl: "/assets/demo/shopee-result-thumb.webp?v=6",
+    resultUrl: "/assets/demo/shopee-result.webp?v=7",
+    thumbUrl: "/assets/demo/shopee-result-thumb.webp?v=7",
     referenceImages: [
       {
         id: "demo-shopee-ref",
