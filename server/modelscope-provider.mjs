@@ -1,5 +1,5 @@
 import { shouldUseBrandKangaroo, BRAND_KANGAROO_CONSTRAINT } from "./brand-policy.mjs";
-import { inferImageMime } from "./image-utils.mjs";
+import { inferImageMime, padBufferToAspectRatio } from "./image-utils.mjs";
 import { resolveBrandAndUserRefs, sceneRefPromptHint } from "./ref-compose.mjs";
 import { aspectPromptConstraint, resolveAspectRatio, sizeForAspectRatio } from "./aspect-ratio.mjs";
 
@@ -10,7 +10,7 @@ function buildPrompt(request, { userCount = 0, collage = false } = {}) {
   const brand = hasBrand ? BRAND_KANGAROO_CONSTRAINT : "";
   const scene = sceneRefPromptHint(userCount, { collage, hasBrand });
   const followRef = userCount && !hasBrand
-    ? "Input image is the primary visual reference: keep its main subject, products, brand colors, icons, and composition cues. Adapt layout to the target aspect ratio, but do not invent an unrelated scene or character."
+    ? "Input image is the primary visual reference: keep its main subject, products, brand colors, icons, and key composition cues. Recompose into the required aspect-ratio canvas; fill the whole frame; do not invent an unrelated scene or character."
     : "";
   const bgFill = hasBrand
     ? "Background: bright warm orange-to-gold commercial marketing fill to all four corners (soft glow, festive light accents). Do NOT use dark night streets, deep crimson neon, black voids, or empty gray/white margins."
@@ -75,7 +75,33 @@ export function createModelScopeProvider({
     const width = picked.width;
     const height = picked.height;
 
-    const image = refs.singleImageUri;
+    let image = refs.singleImageUri;
+    let multiUris = Array.isArray(refs.multiImageUris) ? [...refs.multiImageUris] : [];
+    // Pad refs onto the target-aspect canvas so img2img does not inherit a square (or wrong) ratio.
+    async function padDataUri(dataUri) {
+      if (!dataUri || typeof dataUri !== "string" || !dataUri.startsWith("data:")) return dataUri;
+      const comma = dataUri.indexOf(",");
+      if (comma < 0) return dataUri;
+      const meta = dataUri.slice(0, comma);
+      const raw = Buffer.from(dataUri.slice(comma + 1), "base64");
+      const padded = await padBufferToAspectRatio(raw, width, height);
+      return `data:${padded.mime};base64,${padded.buffer.toString("base64")}`;
+    }
+    if (image) {
+      try {
+        image = await padDataUri(image);
+      } catch (error) {
+        logger.warn?.(`[ModelScope] pad aspect skipped: ${error?.message || error}`);
+      }
+    }
+    if (multiUris.length) {
+      try {
+        multiUris = await Promise.all(multiUris.map((uri) => padDataUri(uri)));
+      } catch (error) {
+        logger.warn?.(`[ModelScope] pad multi aspect skipped: ${error?.message || error}`);
+      }
+    }
+
     const needsImg2Img = requireImg2Img && (shouldUseBrandKangaroo(request) || (Array.isArray(request.referenceImages) && request.referenceImages.length));
     if (needsImg2Img && !image) {
       throw new Error(
@@ -84,7 +110,7 @@ export function createModelScopeProvider({
     }
 
     logger.info?.(
-      `[ModelScope] generating ${width}x${height} via ${activeModel} (${refs.mode}, userRefs=${refs.userCount}, hasImage=${Boolean(image)}, imageChars=${image ? image.length : 0})`
+      `[ModelScope] generating ${width}x${height} (aspect ${aspect}) via ${activeModel} (${refs.mode}, userRefs=${refs.userCount}, hasImage=${Boolean(image)}, imageChars=${image ? image.length : 0})`
     );
 
     const body = {
@@ -92,14 +118,15 @@ export function createModelScopeProvider({
       prompt,
       width,
       height,
+      size: `${width}x${height}`,
       seed: (Date.now() + index * 4243) % 2147483647
     };
 
     // Prefer multi-image array for Qwen-Image-Edit when we have brand + user refs.
-    const supportsMulti = /image-edit/i.test(activeModel) && refs.multiImageUris.length > 1;
+    const supportsMulti = /image-edit/i.test(activeModel) && multiUris.length > 1;
     if (supportsMulti) {
-      body.image = refs.multiImageUris;
-      body.image_url = refs.multiImageUris;
+      body.image = multiUris;
+      body.image_url = multiUris;
     } else if (image) {
       body.image = image;
       body.image_url = image;

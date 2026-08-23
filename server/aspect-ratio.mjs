@@ -62,7 +62,7 @@ export function aspectPromptConstraint(ratio) {
   const [aw, ah] = value.split(":").map(Number);
   const orientation =
     aw === ah ? "square" : aw > ah ? "landscape" : "portrait";
-  return `Aspect ratio: ${value} (${orientation}). Compose the full-bleed poster to this ratio; do not force an exact pixel resolution.`;
+  return `CRITICAL — output canvas aspect ratio MUST be ${value} (${orientation}). Recompose the scene to fill this ${orientation} frame edge-to-edge. Do NOT keep a square layout, letterbox bars, or the reference image's original aspect ratio.`;
 }
 
 /**

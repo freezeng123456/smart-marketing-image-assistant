@@ -1,5 +1,5 @@
 import { shouldUseBrandKangaroo, BRAND_KANGAROO_CONSTRAINT } from "./brand-policy.mjs";
-import { inferImageMime } from "./image-utils.mjs";
+import { inferImageMime, padBufferToAspectRatio } from "./image-utils.mjs";
 import { resolveBrandAndUserRefs, sceneRefPromptHint } from "./ref-compose.mjs";
 import { aspectPromptConstraint, resolveAspectRatio } from "./aspect-ratio.mjs";
 
@@ -10,7 +10,7 @@ function buildPrompt(request, { hasRef = false, userCount = 0, collage = false }
   const brand = hasBrand ? BRAND_KANGAROO_CONSTRAINT : "";
   const scene = sceneRefPromptHint(userCount, { collage, hasBrand });
   const followRef = userCount && !hasBrand
-    ? "Input image is the primary visual reference: keep its main subject, products, brand colors, icons, and composition cues."
+    ? "Input image is the primary visual reference: keep its main subject, products, brand colors, icons, and key cues. Recompose into the required aspect-ratio canvas and fill the whole frame."
     : "";
   const aspect = aspectPromptConstraint(resolveAspectRatio(request));
   return [`Brief: ${original}`, brand, scene, followRef, aspect, `Styles: ${styles}. Full-bleed commercial poster.`].filter(Boolean).join("\n");
@@ -81,6 +81,17 @@ export function createSiliconFlowProvider({
       collage
     });
     const image_size = pickSize(request.size || sizeForAspectFallback(request));
+    const [iw, ih] = String(image_size).split("x").map((n) => Number.parseInt(n, 10));
+    if (image && Number.isFinite(iw) && Number.isFinite(ih) && image.startsWith("data:")) {
+      try {
+        const comma = image.indexOf(",");
+        const raw = Buffer.from(image.slice(comma + 1), "base64");
+        const padded = await padBufferToAspectRatio(raw, iw, ih);
+        image = `data:${padded.mime};base64,${padded.buffer.toString("base64")}`;
+      } catch (error) {
+        logger.warn?.(`[SiliconFlow] pad aspect skipped: ${error?.message || error}`);
+      }
+    }
     logger.info?.(
       `[SiliconFlow] generating ${image_size} via ${activeModel} (${refs.mode}, userRefs=${refs.userCount})`
     );
