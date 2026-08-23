@@ -121,3 +121,41 @@ export function sizeForAspectRatio(ratio, maxEdge = 1280) {
   height = Math.max(64, Math.round(height / 8) * 8);
   return { width, height, ratio: value, size: `${width}x${height}` };
 }
+
+
+/**
+ * Output size for Bailian qwen-image-edit-plus (`parameters.size` as "W*H").
+ * Each edge must be in [512, 2048]. Does not reshape the input reference image —
+ * this only sets the API output size hint.
+ */
+export function sizeForQwenImageEditPlus(ratio) {
+  const { aw, ah, value } = parseAspectRatio(ratio);
+  const presets = {
+    "1:1": [1024, 1024],
+    "16:9": [1280, 720],
+    "9:16": [720, 1280],
+    "4:1": [2048, 512],
+    "4:3": [1280, 960],
+    "3:4": [960, 1280],
+    "3:2": [1536, 1024],
+    "2:3": [1024, 1536],
+    "21:9": [2048, 872]
+  };
+  let width;
+  let height;
+  if (presets[value]) {
+    [width, height] = presets[value];
+  } else {
+    const r = aw / ah;
+    if (r >= 1) {
+      width = Math.min(2048, Math.max(512, Math.round(1024 * Math.sqrt(r))));
+      height = Math.max(1, Math.round(width / r));
+    } else {
+      height = Math.min(2048, Math.max(512, Math.round(1024 * Math.sqrt(1 / r))));
+      width = Math.max(1, Math.round(height * r));
+    }
+    width = Math.min(2048, Math.max(512, Math.round(width / 16) * 16));
+    height = Math.min(2048, Math.max(512, Math.round(height / 16) * 16));
+  }
+  return { width, height, ratio: value, size: `${width}*${height}` };
+}
