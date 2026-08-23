@@ -5,7 +5,7 @@ export const DEFAULT_CASES = [
     id: "shopee-ref",
     sessionId: "demo-session-shopee-ref",
     label: "Shopee 参考图改版",
-    blurb: "上传/带参考图做大促改版，不注入美团袋鼠。",
+    blurb: "上传/带参考图做大促改版。",
     prompt:
       "根据参考图做一张电商大促海报，保留原有橙色主色、Shopee 标识、主标题数字和商品元素，改成竖版 9:16 适合手机的构图，预留促销文案区。",
     ratio: "9:16",
