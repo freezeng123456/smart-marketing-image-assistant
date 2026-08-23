@@ -427,12 +427,17 @@ function applyDefaultCase(item, { toast = true } = {}) {
   if (item.sessionId) {
     state.sessions = store.ensureDemoSessions(buildDemoSessions());
     if (getSession(item.sessionId)) {
-      // Keep the case form fields (incl. referenceImages) already applied above.
+      // Keep the case form fields (incl. referenceImages / selectedSlots) already applied above.
       const refs = state.form.referenceImages;
       const modelId = state.form.modelId;
+      const selectedSlots = state.form.selectedSlots;
       loadSession(item.sessionId, false);
       state.form.referenceImages = refs;
       state.form.modelId = modelId;
+      if (Array.isArray(selectedSlots) && selectedSlots.length) {
+        state.form.selectedSlots = structuredClone(selectedSlots).slice(0, 1);
+        state.form.ratio = slotAspectRatio(state.form.selectedSlots[0]);
+      }
       state.selectedCaseId = item.id;
       syncFormToDom();
       renderDefaultCases();
@@ -500,13 +505,31 @@ function normalizeFormReferences(urlsOrObjects = []) {
     .slice(0, 4);
 }
 
+function matchResourceSlot(width, height) {
+  const w = Math.round(Number(width) || 0);
+  const h = Math.round(Number(height) || 0);
+  if (!(w >= 200 && h >= 200 && w <= 4096 && h <= 4096)) return null;
+  const exact = RESOURCE_SLOT_OPTIONS.find((item) => item.width === w && item.height === h);
+  if (exact) {
+    return { id: exact.id, label: exact.label, width: exact.width, height: exact.height };
+  }
+  const ratio = simplifyRatio(w, h);
+  const byRatio = RESOURCE_SLOT_OPTIONS.find(
+    (item) => simplifyRatio(item.width, item.height) === ratio
+  );
+  if (byRatio) {
+    return { id: byRatio.id, label: byRatio.label, width: byRatio.width, height: byRatio.height };
+  }
+  return { id: `custom-${w}x${h}`, label: "自定义", width: w, height: h };
+}
+
 function slotsFromSizeString(size) {
   const match = String(size || "").match(/(\d+)\s*[x×]\s*(\d+)/i);
   if (!match) return [];
   const width = Number(match[1]);
   const height = Number(match[2]);
-  if (!(width >= 200 && height >= 200 && width <= 4096 && height <= 4096)) return [];
-  return [{ id: `restored-${width}x${height}`, label: "历史尺寸", width, height }];
+  const matched = matchResourceSlot(width, height);
+  return matched ? [matched] : [];
 }
 
 function restoreFormFromSession(session, version) {
@@ -532,17 +555,26 @@ function restoreFormFromSession(session, version) {
   }
   const modelId = version?.modelId || lastRequest.modelId || state.form.modelId;
   const firstUserPrompt = session.messages?.find((message) => message.role === "user")?.content || "";
+  const restoredRatio = selectedSlots.length
+    ? slotAspectRatio(selectedSlots[0])
+    : version?.ratio || session.ratio || state.form.ratio;
   state.form = {
     ...state.form,
     prompt: firstUserPrompt || version?.prompt || lastRequest.prompt || state.form.prompt,
     brandAsset: version?.brandAsset || session.brandAsset || state.form.brandAsset,
     generationType: "text-to-image",
-    ratio: version?.ratio || session.ratio || state.form.ratio,
+    ratio: restoredRatio,
     imageCount: 1,
     styles: [...(version?.styles || session.styles || state.form.styles)].slice(0, 3),
     referenceImages: normalizeFormReferences(refSources),
     modelId: modelId || state.form.modelId,
-    ...(selectedSlots.length ? { selectedSlots } : {})
+    ...(selectedSlots.length
+      ? {
+          selectedSlots,
+          customWidth: selectedSlots[0].width,
+          customHeight: selectedSlots[0].height
+        }
+      : {})
   };
 }
 
@@ -609,6 +641,8 @@ function renderResourceSlots() {
     state.form.ratio = slotAspectRatio(first);
     state.form.customWidth = first.width;
     state.form.customHeight = first.height;
+    if (els.customWidth) els.customWidth.value = Number(first.width);
+    if (els.customHeight) els.customHeight.value = Number(first.height);
     if (els.sizePreview) els.sizePreview.textContent = state.form.ratio;
   }
 }
