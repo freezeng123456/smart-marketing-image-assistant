@@ -165,6 +165,15 @@ const state = {
   exhaustedChannels: {}
 };
 
+// Default marketing prompt: Shopee quick-start copy when empty
+if (!String(state.form.prompt || "").trim()) {
+  state.form.prompt = DEFAULT_FORM.prompt;
+}
+const defaultShopeeCase = DEFAULT_CASES.find((item) => item.id === "shopee-ref");
+if (defaultShopeeCase && state.form.prompt === defaultShopeeCase.prompt) {
+  state.selectedCaseId = "shopee-ref";
+}
+
 function persistSessions() {
   store.saveSessions(state.sessions);
 }
