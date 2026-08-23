@@ -66,19 +66,30 @@ export function aspectPromptConstraint(ratio, { placementLabel = "" } = {}) {
   const [aw, ah] = value.split(":").map(Number);
   const orientation =
     aw === ah ? "square" : aw > ah ? "landscape" : "portrait";
+  const ultraWide = aw / ah >= 2;
+  const formatWord = ultraWide ? "banner" : "poster";
   const placement = String(placementLabel || "").trim();
   const sourceLine = placement
     ? `Target aspect ratio is taken from the webpage placement option「${placement}」: ${value} (${orientation}).`
     : `Target aspect ratio is taken from the webpage placement option: ${value} (${orientation}).`;
   // Style-consistent reframe: new layout for the selected ratio; content may adapt; no letterbox.
-  return [
+  const lines = [
     sourceLine,
     `Reframe this marketing creative specifically for ${value} ${orientation} composition.`,
     "Keep the same visual style, color palette, lighting, materials, and brand look as the reference.",
     "You MAY rearrange layout, rescale elements, and adapt or regenerate scene content so it feels intentionally designed for this placement ratio.",
-    "Fill the entire frame edge-to-edge as a finished full-bleed poster.",
+    `Fill the entire frame edge-to-edge as a finished full-bleed ${formatWord}.`,
     "Do NOT leave letterbox/pillarbox bars, gray/white empty margins, or stretched warped content."
-  ].join(" ");
+  ];
+  if (ultraWide) {
+    lines.push(
+      "This is a wide web banner / leaderboard, not a tall poster.",
+      "Sparse horizontal layout; 1–2 hero products max; large clear empty regions for later copy.",
+      "Do NOT render small readable text, prices, or long slogans on the image (leave blank clean plates).",
+      "Avoid overcrowding; keep strong focal hierarchy left-to-right."
+    );
+  }
+  return lines.join(" ");
 }
 
 /** Pull ratio + placement label from the validated request (webpage resourceSlots). */

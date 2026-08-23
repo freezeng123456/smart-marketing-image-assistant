@@ -1083,7 +1083,7 @@ function renderPartialImages() {
     const label = escapeHtml(slot.label || image?.slotLabel || `资源位 ${index + 1}`);
     if (image?.status === "FINISH" && image.url && isSafeImageUrl(image.url)) {
       cards.push(
-        `<div class="partial-card is-ready" style="aspect-ratio:${ratio}">` +
+        `<div class="partial-card is-ready">` +
           `<img src="${escapeHtml(image.url)}" alt="${label} 生成结果" />` +
         `</div>`
       );

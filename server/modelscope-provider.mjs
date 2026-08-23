@@ -1,7 +1,13 @@
 import { shouldUseBrandKangaroo, BRAND_KANGAROO_CONSTRAINT } from "./brand-policy.mjs";
 import { inferImageMime } from "./image-utils.mjs";
 import { resolveBrandAndUserRefs, sceneRefPromptHint } from "./ref-compose.mjs";
-import { aspectPromptFromRequest, resolveAspectRatio, sizeForAspectRatio } from "./aspect-ratio.mjs";
+import { aspectPromptFromRequest, parseAspectRatio, resolveAspectRatio, sizeForAspectRatio } from "./aspect-ratio.mjs";
+
+function isUltraWideRequest(request) {
+  const aspect = resolveAspectRatio(request);
+  const { aw, ah } = parseAspectRatio(aspect);
+  return aw / ah >= 2;
+}
 
 function buildPrompt(request, { userCount = 0, collage = false } = {}) {
   const styles = Array.isArray(request.styles) && request.styles.length ? request.styles.join(", ") : "commercial marketing";
@@ -9,14 +15,20 @@ function buildPrompt(request, { userCount = 0, collage = false } = {}) {
   const hasBrand = shouldUseBrandKangaroo(request);
   const brand = hasBrand ? BRAND_KANGAROO_CONSTRAINT : "";
   const scene = sceneRefPromptHint(userCount, { collage, hasBrand });
+  const ultraWide = isUltraWideRequest(request);
+  const formatWord = ultraWide ? "banner" : "poster";
   const followRef = userCount && !hasBrand
-    ? "Input image is the style and brand reference: keep its palette, logos, key products, and design language. Redesign the layout for the target aspect ratio; content and composition may change as needed."
+    ? (ultraWide
+      ? "Input image is a style/brand reference only: keep palette, brand colors, and a simple logo mark if present. Do NOT preserve the full square-poster product stack — redesign sparsely for a wide banner."
+      : "Input image is the style and brand reference: keep its palette, logos, key products, and design language. Redesign the layout for the target aspect ratio; content and composition may change as needed.")
     : "";
+  const noTextRule =
+    "Do not paint legible copy, numbers, prices, or slogans on the image; reserve empty copy areas as solid or soft color shapes only.";
   const bgFill = hasBrand
     ? "Background: bright warm orange-to-gold commercial marketing fill to all four corners (soft glow, festive light accents). Do NOT use dark night streets, deep crimson neon, black voids, or empty gray/white margins."
-    : "Full-bleed commercial marketing poster; fill the entire frame with scene and color, no black empty margins.";
+    : `Full-bleed commercial marketing ${formatWord}; fill the entire frame with scene and color, no black empty margins.`;
   const aspect = aspectPromptFromRequest(request);
-  return [`Brief: ${original}`, brand, scene, followRef, aspect, bgFill, `Styles: ${styles}. Full-bleed commercial marketing poster, high quality.`]
+  return [`Brief: ${original}`, brand, scene, followRef, aspect, bgFill, noTextRule, `Styles: ${styles}. Full-bleed commercial marketing ${formatWord}, high quality.`]
     .filter(Boolean)
     .join("\n");
 }
@@ -73,8 +85,9 @@ export function createModelScopeProvider({
       );
     }
 
+    const promptPreview = prompt.length > 400 ? `${prompt.slice(0, 400)}…` : prompt;
     logger.info?.(
-      `[ModelScope] generating ${width}x${height} (aspect ${aspect}) via ${activeModel} (${refs.mode}, userRefs=${refs.userCount}, hasImage=${Boolean(image)}, imageChars=${image ? image.length : 0})`
+      `[ModelScope] generating ${width}x${height} (aspect ${aspect}) via ${activeModel} (${refs.mode}, userRefs=${refs.userCount}, hasImage=${Boolean(image)}, imageChars=${image ? image.length : 0}) prompt=${JSON.stringify(promptPreview)}`
     );
 
     const body = {
@@ -95,7 +108,11 @@ export function createModelScopeProvider({
       body.image = image;
       body.image_url = image;
       // Help img2img-capable backends actually condition on the reference.
-      if (!("strength" in body)) body.strength = Number(process.env.MODELSCOPE_IMG2IMG_STRENGTH || 0.55);
+      if (!("strength" in body)) {
+        const ultraWide = isUltraWideRequest(request);
+        const defaultStrength = ultraWide ? 0.72 : 0.55;
+        body.strength = Number(process.env.MODELSCOPE_IMG2IMG_STRENGTH || defaultStrength);
+      }
     }
 
     const response = await fetchImpl(apiBase, {

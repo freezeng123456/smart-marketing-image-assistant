@@ -1238,8 +1238,7 @@ input::placeholder {
 }
 
 .partial-results.count-1 {
-  grid-template-columns: minmax(0, 420px);
-  justify-content: start;
+  grid-template-columns: minmax(0, 1fr);
 }
 
 .partial-results.count-3,
@@ -1250,32 +1249,36 @@ input::placeholder {
 .partial-card {
   position: relative;
   overflow: hidden;
-  aspect-ratio: 3 / 4;
+  width: 100%;
+  aspect-ratio: var(--result-aspect, 3 / 4);
   border: 1px dashed rgba(180, 196, 184, 0.28);
   border-radius: 14px;
   background:
     linear-gradient(160deg, rgba(54, 72, 58, 0.55), rgba(24, 30, 26, 0.92)),
     #1a211c;
-  min-height: 180px;
 }
 
 .partial-card.is-ready {
   border-style: solid;
   border-color: var(--border);
   background: #121513;
+  aspect-ratio: auto;
 }
 
 .partial-card img {
   width: 100%;
-  height: 100%;
+  height: auto;
+  max-height: 680px;
   object-fit: contain;
   display: block;
-  background: #1a211c;
+  background: transparent;
 }
 
 .partial-card.skeleton {
   display: grid;
   place-items: center;
+  min-height: 72px;
+  aspect-ratio: var(--result-aspect, 3 / 4);
 }
 
 .skeleton-body {
@@ -1428,20 +1431,22 @@ input::placeholder {
 .image-frame {
   position: relative;
   overflow: hidden;
-  min-height: 260px;
-  aspect-ratio: var(--result-aspect, 9 / 16);
+  width: 100%;
   background: #0e110f;
 }
 
-.count-1 .image-frame {
-  max-height: 680px;
+.image-frame.skeleton {
+  min-height: 100px;
+  aspect-ratio: var(--result-aspect, 9 / 16);
 }
 
 .image-frame img {
   width: 100%;
-  height: 100%;
+  height: auto;
+  max-height: 680px;
   object-fit: contain;
-  background: #101312;
+  display: block;
+  background: transparent;
   cursor: zoom-in;
 }
 
