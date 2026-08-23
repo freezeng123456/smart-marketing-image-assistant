@@ -1,6 +1,6 @@
 import { shouldUseBrandKangaroo, BRAND_KANGAROO_CONSTRAINT } from "./brand-policy.mjs";
-import { inferImageMime } from "./image-utils.mjs";
-import { resolveBrandAndUserRefs, sceneRefPromptHint } from "./ref-compose.mjs";
+import { ensureWanxEditInputSize, inferImageMime } from "./image-utils.mjs";
+import { resolveBrandAndUserRefs, sceneRefPromptHint, toDataUri } from "./ref-compose.mjs";
 import { aspectPromptFromRequest, parseAspectRatio, resolveAspectRatio } from "./aspect-ratio.mjs";
 
 function isUltraWideRequest(request) {
@@ -57,17 +57,74 @@ function resolveApiKey(explicit = "") {
   );
 }
 
+const DEFAULT_API_BASE =
+  "https://dashscope.aliyuncs.com/api/v1/services/aigc/image2image/image-synthesis";
+const DEFAULT_TASK_BASE = "https://dashscope.aliyuncs.com/api/v1/tasks";
+
+/**
+ * Prefer explicit constructor args, then DASHSCOPE_WORKSPACE_BASE (overrides
+ * DASHSCOPE_API_BASE / DASHSCOPE_TASK_BASE), then those envs, then public defaults.
+ * workspace example: https://ws-xxx.cn-beijing.maas.aliyuncs.com/api/v1
+ */
+export function resolveDashScopeBases({ apiBase = "", taskBase = "" } = {}) {
+  const explicitApi = String(apiBase || "").trim();
+  const explicitTask = String(taskBase || "").trim();
+  const workspace = String(process.env.DASHSCOPE_WORKSPACE_BASE || "").trim().replace(/\/$/, "");
+  const fromWorkspace = workspace
+    ? {
+        apiBase: `${workspace}/services/aigc/image2image/image-synthesis`,
+        taskBase: `${workspace}/tasks`
+      }
+    : null;
+  return {
+    apiBase:
+      explicitApi ||
+      fromWorkspace?.apiBase ||
+      String(process.env.DASHSCOPE_API_BASE || "").trim() ||
+      DEFAULT_API_BASE,
+    taskBase:
+      explicitTask ||
+      fromWorkspace?.taskBase ||
+      String(process.env.DASHSCOPE_TASK_BASE || "").trim() ||
+      DEFAULT_TASK_BASE
+  };
+}
+
+function parseImageDataUri(uri) {
+  const match = String(uri || "").match(/^data:(image\/[a-zA-Z0-9.+-]+);base64,(.+)$/s);
+  if (!match) return null;
+  try {
+    const buffer = Buffer.from(match[2], "base64");
+    if (!buffer.length) return null;
+    return { mime: match[1], buffer };
+  } catch {
+    return null;
+  }
+}
+
+/** Ensure a data-URI (or return unchanged http URL) meets wanx2.1-imageedit input constraints. */
+export async function prepareWanxBaseImageUrl(imageUri, { logger } = {}) {
+  const parsed = parseImageDataUri(imageUri);
+  if (!parsed) return imageUri;
+  const ensured = await ensureWanxEditInputSize(parsed.buffer, { mime: parsed.mime });
+  if (ensured.resized) {
+    logger?.info?.(
+      `[DashScope] upscaled base image to ${ensured.width}x${ensured.height} for wanx constraints`
+    );
+  }
+  return toDataUri(ensured.buffer, ensured.mime);
+}
+
 /**
  * Alibaba Bailian / DashScope wanx2.1-imageedit (async image2image).
  * Output is returned as-is — do not letterbox/crop model results.
- * Input aspect resize without black bars is not implemented here; send resolved ref URI as-is.
+ * Input data-URI refs are upscaled so each edge is in [512, 4096] before submit.
  */
 export function createDashScopeProvider({
   apiKey = resolveApiKey(),
   model = process.env.DASHSCOPE_IMAGE_MODEL || "wanx2.1-imageedit",
-  apiBase = process.env.DASHSCOPE_API_BASE ||
-    "https://dashscope.aliyuncs.com/api/v1/services/aigc/image2image/image-synthesis",
-  taskBase = process.env.DASHSCOPE_TASK_BASE || "https://dashscope.aliyuncs.com/api/v1/tasks",
+  apiBase,
+  taskBase,
   strength = Number(process.env.DASHSCOPE_IMG2IMG_STRENGTH || 0.5),
   loadImageSource,
   fetchImpl = globalThis.fetch,
@@ -75,13 +132,14 @@ export function createDashScopeProvider({
 } = {}) {
   if (!apiKey) throw new Error("DASHSCOPE_API_KEY is required.");
   if (typeof fetchImpl !== "function") throw new Error("A fetch implementation is required.");
+  ({ apiBase, taskBase } = resolveDashScopeBases({ apiBase, taskBase }));
 
   async function generate(request, index = 0, { signal } = {}) {
     const activeModel = request.modelOverride || model;
     const refs = await resolveBrandAndUserRefs(request, { loadImageSource, signal, logger });
     const collage = refs.mode.includes("collage");
     const prompt = buildPrompt(request, { userCount: refs.userCount, collage });
-    const image = refs.singleImageUri;
+    let image = refs.singleImageUri;
 
     const needsImg2Img =
       shouldUseBrandKangaroo(request) || (Array.isArray(request.referenceImages) && request.referenceImages.length);
@@ -95,6 +153,8 @@ export function createDashScopeProvider({
       }
       throw new Error("百炼 wanx 图生图需要品牌 IP 或参考图。");
     }
+
+    image = await prepareWanxBaseImageUrl(image, { logger });
 
     const aspect = resolveAspectRatio(request);
     const ultraWide = isUltraWideRequest(request);
