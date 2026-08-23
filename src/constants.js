@@ -30,13 +30,13 @@ export const DEFAULT_CASES = [
     label: "美团袋鼠 IP",
     blurb: "文案含「美团」时自动锁定黄色袋鼠身份，姿势场景可变。",
     prompt:
-      "美团外卖夜宵大促海报，美团黄色袋鼠侧脸或 3/4 站姿举着披萨，霓虹夜市氛围，橙黄主色，竖版 9:16 全出血，预留标题和优惠信息区域。保持美团黄色袋鼠品牌 IP 识别度。",
+      "美团外卖夜宵大促竖版海报。严格保留参考图里的美团黄色袋鼠IP外形，侧脸或3/4，只改姿势为举起披萨，霓虹夜市，橙黄主色，1080x1920全出血，上下留白给标题和优惠。不要腮红，不要换动物，画面不要写字。",
     ratio: "9:16",
     size: "1080x1920",
     selectedSlots: [{ id: "splash", label: "开屏广告", width: 1080, height: 1920 }],
     modelId: "modelscope-qwen-edit",
     brandAsset: "brand-kangaroo",
-    resultUrl: "/assets/demo/meituan-kangaroo-result.png?v=3",
+    resultUrl: "/assets/demo/meituan-kangaroo-result.png?v=4",
     referenceImages: []
   }
 ];
