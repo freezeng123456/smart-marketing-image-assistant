@@ -6,6 +6,7 @@ import { createCloudflareProvider } from "./cloudflare-provider.mjs";
 import { createPollinationsProvider, createFailoverProvider } from "./pollinations-provider.mjs";
 import { createSiliconFlowProvider } from "./siliconflow-provider.mjs";
 import { createModelScopeProvider } from "./modelscope-provider.mjs";
+import { createDashScopeProvider } from "./dashscope-provider.mjs";
 import { MODEL_CATALOG, DEFAULT_MODEL_ID, DEFAULT_IMG2IMG_MODEL_ID, findModel, isQuotaError, listUiModels } from "./model-catalog.mjs";
 import { createExhaustedStore } from "./exhausted-store.mjs";
 import { createRouterProvider } from "./router-provider.mjs";
@@ -202,10 +203,17 @@ export async function createMarketingServer({
   let providerError = null;
   let providersByChannel = {};
 
-  // Preferred free-tier order: ModelScope → SiliconFlow → Cloudflare → Pollinations
+  // Preferred free-tier order: DashScope(Bailian) → ModelScope → SiliconFlow → Cloudflare → Pollinations
   function buildOrderedProviders(logger) {
     const ordered = [];
     const byChannel = {};
+    if (process.env.DASHSCOPE_API_KEY || process.env.BAILIAN_API_KEY || process.env.ALIYUN_DASHSCOPE_API_KEY) {
+      try {
+        const p = createDashScopeProvider({ loadImageSource, logger });
+        byChannel.dashscope = p;
+        ordered.push(p);
+      } catch (e) { logger.warn?.(`[provider] dashscope skipped: ${e.message}`); }
+    }
     if (process.env.MODELSCOPE_API_TOKEN || process.env.MODELSCOPE_API_KEY) {
       try {
         const p = createModelScopeProvider({ loadImageSource, logger });
@@ -239,6 +247,7 @@ export async function createMarketingServer({
 
   function channelKey(provider) {
     const name = String(provider?.name || "");
+    if (name.includes("dashscope") || name.includes("bailian")) return "dashscope";
     if (name.includes("modelscope")) return "modelscope";
     if (name.includes("siliconflow")) return "siliconflow";
     if (name.includes("cloudflare")) return "cloudflare";

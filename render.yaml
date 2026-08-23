@@ -10,6 +10,8 @@ services:
     envVars:
       - key: NODE_VERSION
         value: "20"
+      - key: DASHSCOPE_API_KEY
+        sync: false
       - key: MODELSCOPE_API_TOKEN
         sync: false
       - key: SILICONFLOW_API_KEY

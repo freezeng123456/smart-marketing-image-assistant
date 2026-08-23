@@ -1,8 +1,19 @@
 /** Free-tier image models exposed in the web UI. */
 export const MODEL_CATALOG = [
 {
+    id: "bailian-wanx-imageedit",
+    label: "百炼 · wanx2.1-imageedit（推荐/图生图）",
+    channel: "dashscope",
+    provider: "dashscope",
+    model: "wanx2.1-imageedit",
+    tier: "best",
+    img2img: true,
+    reliableImg2Img: true
+  },
+
+{
     id: "modelscope-qwen-edit",
-    label: "魔搭 · Qwen-Image-Edit（推荐/图生图）",
+    label: "魔搭 · Qwen-Image-Edit（图生图）",
     channel: "modelscope",
     provider: "modelscope",
     model: "Qwen/Qwen-Image-Edit",
@@ -34,8 +45,8 @@ export const MODEL_CATALOG = [
   }
 ];
 
-export const DEFAULT_MODEL_ID = "modelscope-qwen-edit";
-export const DEFAULT_IMG2IMG_MODEL_ID = "modelscope-qwen-edit";
+export const DEFAULT_MODEL_ID = "bailian-wanx-imageedit";
+export const DEFAULT_IMG2IMG_MODEL_ID = "bailian-wanx-imageedit";
 
 export function modelsForChannel(channel) {
   return MODEL_CATALOG.filter((item) => item.channel === channel && item.img2img);
