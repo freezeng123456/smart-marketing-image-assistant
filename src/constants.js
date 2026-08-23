@@ -361,7 +361,7 @@ export const DEFAULT_FORM = Object.freeze({
   prompt: "根据参考图做一张电商大促海报，保留原有橙色主色、Shopee 标识、主标题数字和商品元素，改成竖版 9:16 适合手机的构图，预留促销文案区。",
   brandAsset: "none",
   generationType: "text-to-image",
-  modelId: "modelscope-zimage",
+  modelId: "modelscope-qwen-image",
   ratio: "9:16",
   customWidth: 800,
   customHeight: 600,

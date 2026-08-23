@@ -53,7 +53,7 @@ export const MODEL_CATALOG = [
   }
 ];
 
-export const DEFAULT_MODEL_ID = "modelscope-zimage"; // fast for text-only
+export const DEFAULT_MODEL_ID = "modelscope-qwen-image";
 export const DEFAULT_IMG2IMG_MODEL_ID = "modelscope-qwen-edit";
 
 export function modelsForChannel(channel) {

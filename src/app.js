@@ -664,7 +664,7 @@ function renderModelSelect() {
     ? state.modelCatalog
     : [
         {
-          id: state.form.modelId || "modelscope-zimage",
+          id: state.form.modelId || "modelscope-qwen-image",
           label: "魔搭 · Z-Image-Turbo（调试快）",
           channel: "modelscope",
           disabled: false,
@@ -1085,7 +1085,7 @@ function buildRequest({ prompt, sessionId = null, contextImageUrl = null, parent
     resourceSlots: getSelectedSlots(),
     styles: [],
     imageCount: getSelectedSlots().length,
-    modelId: state.form.modelId || "modelscope-zimage",
+    modelId: state.form.modelId || "modelscope-qwen-image",
     referenceImages,
     sessionId,
     ...(isAdjustment
