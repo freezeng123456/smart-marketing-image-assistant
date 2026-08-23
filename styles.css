@@ -349,6 +349,62 @@ img {
   font-weight: 720;
 }
 
+.examples-dropdown {
+  position: relative;
+  flex-shrink: 0;
+}
+
+.examples-menu {
+  position: absolute;
+  top: calc(100% + 8px);
+  right: 0;
+  z-index: 40;
+  min-width: 168px;
+  padding: 6px;
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  border-radius: 12px;
+  background: #1c201e;
+  box-shadow: 0 16px 40px rgba(0, 0, 0, 0.45);
+}
+
+.examples-menu-item {
+  display: block;
+  width: 100%;
+  padding: 10px 12px;
+  border: 0;
+  border-radius: 8px;
+  color: var(--text);
+  background: transparent;
+  text-align: left;
+  cursor: pointer;
+  font-size: 13px;
+  font-weight: 650;
+}
+
+.examples-menu-item:hover,
+.examples-menu-item:focus-visible {
+  background: rgba(255, 176, 32, 0.12);
+  color: var(--primary-strong);
+  outline: none;
+}
+
+.examples-dropdown.is-open .open-examples,
+.examples-dropdown.is-open #open-examples {
+  border-color: rgba(246, 166, 35, 0.55);
+}
+
+.quickstart-content {
+  padding: 20px 24px 24px;
+}
+
+.quickstart-content .field-hint {
+  margin: 0 0 14px;
+}
+
+.quickstart-modal-card {
+  width: min(640px, 100%);
+}
+
 .icon-button {
   width: 40px;
   height: 40px;

@@ -70,7 +70,11 @@ const els = {
   newCreation: $("#new-creation"),
   historyEntry: $("#history-entry"),
   openExamples: $("#open-examples"),
-  defaultCases: $("#default-cases"),
+  examplesDropdown: $("#examples-dropdown"),
+  examplesMenu: $("#examples-menu"),
+  quickstartModal: $("#quickstart-modal"),
+  quickstartCases: $("#quickstart-cases"),
+  defaultCases: $("#quickstart-cases"),
   emptyStage: $("#empty-stage"),
   progressCard: $("#progress-card"),
   errorCard: $("#error-card"),
@@ -2019,6 +2023,7 @@ function bindEvents() {
     if (defaultCaseBtn) {
       const item = DEFAULT_CASES.find((entry) => entry.id === defaultCaseBtn.dataset.defaultCase);
       applyDefaultCase(item);
+      if (els.quickstartModal && !els.quickstartModal.hidden) closeModal(els.quickstartModal);
       return;
     }
 
@@ -2316,7 +2321,44 @@ function bindEvents() {
   els.errorHistory.addEventListener("click", () => setView("history"));
   els.newCreation?.addEventListener("click", resetCreation);
   els.historyEntry?.addEventListener("click", () => setView("history"));
-  els.openExamples.addEventListener("click", () => openModal(els.exampleModal));
+  function setExamplesMenuOpen(open) {
+    if (!els.examplesDropdown || !els.examplesMenu || !els.openExamples) return;
+    els.examplesMenu.hidden = !open;
+    els.examplesDropdown.classList.toggle("is-open", open);
+    els.openExamples.setAttribute("aria-expanded", open ? "true" : "false");
+  }
+
+  function toggleExamplesMenu() {
+    const isOpen = els.examplesDropdown?.classList.contains("is-open");
+    setExamplesMenuOpen(!isOpen);
+  }
+
+  els.openExamples?.addEventListener("click", (event) => {
+    event.stopPropagation();
+    toggleExamplesMenu();
+  });
+
+  els.examplesMenu?.addEventListener("click", (event) => {
+    const actionBtn = event.target.closest("[data-examples-action]");
+    if (!actionBtn) return;
+    event.stopPropagation();
+    const action = actionBtn.dataset.examplesAction;
+    setExamplesMenuOpen(false);
+    if (action === "guide") {
+      openModal(els.exampleModal);
+      renderExampleModal();
+    } else if (action === "quickstart") {
+      renderDefaultCases();
+      openModal(els.quickstartModal);
+    }
+  });
+
+  document.addEventListener("click", (event) => {
+    if (!els.examplesDropdown?.classList.contains("is-open")) return;
+    if (els.examplesDropdown.contains(event.target)) return;
+    setExamplesMenuOpen(false);
+  });
+
   els.addCustomSlot?.addEventListener("click", () => addCustomResourceSlot());
 
   els.historySearch.addEventListener("input", () => {
@@ -2339,6 +2381,10 @@ function bindEvents() {
 
   document.addEventListener("keydown", (event) => {
     if (event.key === "Escape") {
+      if (els.examplesDropdown?.classList.contains("is-open")) {
+        setExamplesMenuOpen(false);
+        return;
+      }
       const open = $$(".modal-backdrop:not([hidden])").at(-1);
       if (open) closeModal(open);
     }

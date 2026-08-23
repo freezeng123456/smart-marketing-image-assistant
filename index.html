@@ -9,7 +9,7 @@
     />
     <meta name="theme-color" content="#171a19" />
     <title>智能营销生图助手</title>
-    <link rel="stylesheet" href="./styles.css?v=1787491049" />
+    <link rel="stylesheet" href="./styles.css?v=1787492500" />
   </head>
   <body>
     <header class="topbar">
@@ -45,18 +45,16 @@
                 <p class="panel-kicker">CREATION BRIEF</p>
                 <h2 id="creation-config-title">创作配置</h2>
               </div>
-              <button class="text-button" id="open-examples" type="button">查看示例</button>
+              <div class="examples-dropdown" id="examples-dropdown">
+                <button class="text-button" id="open-examples" type="button" aria-haspopup="menu" aria-expanded="false" aria-controls="examples-menu">查看示例</button>
+                <div class="examples-menu" id="examples-menu" role="menu" hidden>
+                  <button class="examples-menu-item" type="button" role="menuitem" data-examples-action="guide">生成示例参考</button>
+                  <button class="examples-menu-item" type="button" role="menuitem" data-examples-action="quickstart">快速开始</button>
+                </div>
+              </div>
             </div>
 
             <form id="generation-form" novalidate>
-
-              <div class="field-block" id="default-cases-block">
-                <div class="field-label-row">
-                  <label>快速开始</label>
-                  <span>进来先试这两个案例</span>
-                </div>
-                <div class="default-case-grid" id="default-cases"></div>
-              </div>
 
               <div class="field-block field-block-prominent">
                 <div class="field-label-row">
@@ -319,6 +317,22 @@
       </section>
     </div>
 
+    <div class="modal-backdrop" id="quickstart-modal" hidden>
+      <section class="modal quickstart-modal-card" role="dialog" aria-modal="true" aria-labelledby="quickstart-title">
+        <header class="modal-header">
+          <div>
+            <p class="panel-kicker">QUICK START</p>
+            <h2 id="quickstart-title">快速开始</h2>
+          </div>
+          <button class="icon-button" type="button" data-close-modal="quickstart-modal" aria-label="关闭">×</button>
+        </header>
+        <div class="quickstart-content">
+          <p class="field-hint">进来先试这两个案例</p>
+          <div class="default-case-grid" id="quickstart-cases"></div>
+        </div>
+      </section>
+    </div>
+
     <div class="modal-backdrop" id="detail-modal" hidden>
       <section class="modal detail-modal-card" role="dialog" aria-modal="true" aria-labelledby="detail-title">
         <header class="modal-header">
@@ -347,6 +361,6 @@
     <div class="toast-region" id="toast-region" aria-live="polite" aria-atomic="true"></div>
 
     <script src="./config.js"></script>
-    <script type="module" src="./src/app.js?v=1787491049"></script>
+    <script type="module" src="./src/app.js?v=1787492500"></script>
   </body>
 </html>
