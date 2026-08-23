@@ -66,10 +66,10 @@ export function createTaskService({ provider, runtimeDir, logger = console, task
       ? task.request.resourceSlots.slice(0, 4)
       : null;
     const plannedCount = plannedSlots ? plannedSlots.length : 1;
-    // Multi-slot runs sequentially; give each slot enough time (default 3min each, cap 12min).
+    // Slots run in parallel; timeout needs one-slot headroom, not N× serial time.
     const effectiveTimeoutMs = Math.min(
       Number(process.env.TASK_TIMEOUT_MAX_MS) || 720_000,
-      Math.max(taskTimeoutMs, taskTimeoutMs * plannedCount)
+      Math.max(taskTimeoutMs, Math.round(taskTimeoutMs * (plannedCount > 1 ? 1.35 : 1)))
     );
     const timeout = setTimeout(() => {
       task.timeoutTriggered = true;
@@ -85,70 +85,102 @@ export function createTaskService({ provider, runtimeDir, logger = console, task
       const slots = plannedSlots;
       const count = plannedCount;
       const images = [];
+      const taskDir = join(generatedDir, task.taskId);
+      await mkdir(taskDir, { recursive: true });
 
-      for (let index = 0; index < count; index += 1) {
-        if (task.aborted) throw new DOMException("Aborted", "AbortError");
+      const slotJobs = Array.from({ length: count }, (_, index) => {
         const slot = slots?.[index] || null;
         const slotSize = slot ? `${slot.width}x${slot.height}` : task.request.size;
-        const slotLabel = slot ? `${slot.label || "资源位"} ${slotSize}` : "";
-        const baseProgress = 30 + Math.round((index / count) * 52);
-        updateTask(task, {
-          progress: baseProgress,
-          content: index === 0
-            ? (slotLabel ? `正在生成 ${slotLabel}...` : "正在调用生图模型...")
-            : `正在生成第 ${index + 1}/${count} 张（${slotLabel || slotSize}）...`
-        });
+        const slotLabel = slot ? `${slot.label || "资源位"} ${slotSize}` : slotSize;
+        return { index, slot, slotSize, slotLabel };
+      });
 
-        const result = await provider.generate(
-          {
-            ...task.request,
+      updateTask(task, {
+        progress: 30,
+        content: count > 1
+          ? `正在并行生成 ${count} 个资源位...`
+          : (slotJobs[0]?.slotLabel ? `正在生成 ${slotJobs[0].slotLabel}...` : "正在调用生图模型...")
+      });
+
+      const settled = await Promise.allSettled(
+        slotJobs.map(async ({ index, slot, slotSize, slotLabel }) => {
+          if (task.aborted) throw new DOMException("Aborted", "AbortError");
+          const result = await provider.generate(
+            {
+              ...task.request,
+              size: slotSize,
+              ratio: task.request.ratio || "custom"
+            },
+            index,
+            { signal: task.controller.signal }
+          );
+          let outBuffer = result.buffer;
+          let outMime = result.mime;
+          if (slot?.width && slot?.height) {
+            const fitted = await fitToExactSize(outBuffer, {
+              width: slot.width,
+              height: slot.height,
+              mime: outMime
+            });
+            outBuffer = fitted.buffer;
+            outMime = fitted.mime;
+          }
+          const fileName = imageFileName(index, outMime);
+          await writeFile(join(taskDir, fileName), outBuffer);
+          const url = `/generated/${task.taskId}/${fileName}`;
+          const image = {
+            id: `${task.taskId}-image-${index + 1}`,
+            url,
+            status: "FINISH",
+            prompt: task.request.prompt,
+            model: result.model || provider.name,
+            auditStatus: "PASSED",
             size: slotSize,
-            ratio: task.request.ratio || "custom"
-          },
-          index,
-          { signal: task.controller.signal }
-        );
-        let outBuffer = result.buffer;
-        let outMime = result.mime;
-        if (slot?.width && slot?.height) {
-          const fitted = await fitToExactSize(outBuffer, {
-            width: slot.width,
-            height: slot.height,
-            mime: outMime
+            slotLabel: slot?.label || ""
+          };
+          // Publish partials as each slot finishes (order by slot index).
+          images[index] = image;
+          const ready = images.filter(Boolean);
+          updateTask(task, {
+            images: ready,
+            progress: Math.min(92, 35 + Math.round((ready.length / count) * 55)),
+            content: ready.length < count
+              ? `已完成 ${ready.length}/${count}（刚完成：${slotLabel}），其余并行生成中...`
+              : "正在进行内容安全审核..."
           });
-          outBuffer = fitted.buffer;
-          outMime = fitted.mime;
-        }
-        const fileName = imageFileName(index, outMime);
-        const taskDir = join(generatedDir, task.taskId);
-        await mkdir(taskDir, { recursive: true });
-        await writeFile(join(taskDir, fileName), outBuffer);
-        const url = `/generated/${task.taskId}/${fileName}`; // relative: survives http tunnels & host changes
-        images.push({
-          id: `${task.taskId}-image-${index + 1}`,
-          url,
-          status: "FINISH",
-          prompt: task.request.prompt,
-          model: result.model || provider.name,
-          auditStatus: "PASSED",
-          size: slotSize,
-          slotLabel: slot?.label || ""
-        });
-        updateTask(task, {
-          images,
-          progress: 45 + Math.round(((index + 1) / count) * 40),
-          content: index + 1 < count ? `第 ${index + 1} 张已完成，继续生成...` : "正在进行内容安全审核..."
-        });
+          return image;
+        })
+      );
+
+      if (task.aborted) throw new DOMException("Aborted", "AbortError");
+      if (task.timeoutTriggered) throw new Error("task-timeout");
+
+      const failures = settled
+        .map((item, index) => (item.status === "rejected" ? { index, reason: item.reason } : null))
+        .filter(Boolean);
+      const ready = images.filter(Boolean);
+
+      if (!ready.length) {
+        const first = failures[0]?.reason;
+        throw first || new Error("全部资源位生成失败");
       }
 
       updateTask(task, {
         status: "DONE",
         progress: 100,
-        content: "生成完成",
-        images,
+        content: failures.length
+          ? `已生成 ${ready.length}/${count} 张，有 ${failures.length} 个资源位失败可单独重试。`
+          : "生成完成",
+        images: ready,
         watermark: "图片由智能营销生图助手生成",
         completedAt: new Date().toISOString()
       });
+      if (failures.length) {
+        logger.warn?.(
+          "[image-task] partial slot failures",
+          failures.map((f) => ({ index: f.index, message: f.reason?.message || String(f.reason) }))
+        );
+      }
     } catch (error) {
       if (task.aborted) {
         updateTask(task, {
