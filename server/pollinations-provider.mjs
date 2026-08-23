@@ -1,5 +1,5 @@
 import { shouldUseBrandKangaroo, BRAND_KANGAROO_CONSTRAINT } from "./brand-policy.mjs";
-import { aspectPromptConstraint, resolveAspectRatio, sizeForAspectRatio } from "./aspect-ratio.mjs";
+import { aspectPromptFromRequest, resolveAspectRatio, sizeForAspectRatio } from "./aspect-ratio.mjs";
 import { normalizeModelSize } from "./cloudflare-provider.mjs";
 
 const DEFAULT_BASE = "https://image.pollinations.ai/prompt";
@@ -9,7 +9,7 @@ function buildPrompt(request) {
   const styles = Array.isArray(request.styles) && request.styles.length ? request.styles.join(", ") : "commercial marketing";
   const original = String(request.prompt || "").trim();
   const brand = shouldUseBrandKangaroo(request) ? BRAND_KANGAROO_CONSTRAINT : "";
-  const aspect = aspectPromptConstraint(resolveAspectRatio(request));
+  const aspect = aspectPromptFromRequest(request);
   return [
     `Brief: ${original}`,
     brand,

@@ -1137,6 +1137,7 @@ function buildRequest({ prompt, sessionId = null, contextImageUrl = null, parent
     prompt,
     brandAsset,
     generationType: isAdjustment ? "image-edit" : state.form.generationType,
+    // Ratio always comes from the webpage resource-slot option (not a free-typed field).
     ratio: (() => {
       const slots = getSelectedSlots();
       return slotAspectRatio(slots[0]);

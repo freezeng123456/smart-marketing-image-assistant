@@ -1,7 +1,7 @@
 import { shouldUseBrandKangaroo, BRAND_KANGAROO_CONSTRAINT } from "./brand-policy.mjs";
 import { inferImageMime } from "./image-utils.mjs";
 import { resolveBrandAndUserRefs, sceneRefPromptHint } from "./ref-compose.mjs";
-import { aspectPromptConstraint, resolveAspectRatio } from "./aspect-ratio.mjs";
+import { aspectPromptFromRequest, resolveAspectRatio } from "./aspect-ratio.mjs";
 
 function buildPrompt(request, { hasRef = false, userCount = 0, collage = false } = {}) {
   const styles = Array.isArray(request.styles) && request.styles.length ? request.styles.join(", ") : "commercial marketing";
@@ -12,7 +12,7 @@ function buildPrompt(request, { hasRef = false, userCount = 0, collage = false }
   const followRef = userCount && !hasBrand
     ? "Input image is the style and brand reference: keep its palette, logos, key products, and design language. Redesign the layout for the target aspect ratio; content and composition may change as needed."
     : "";
-  const aspect = aspectPromptConstraint(resolveAspectRatio(request));
+  const aspect = aspectPromptFromRequest(request);
   return [`Brief: ${original}`, brand, scene, followRef, aspect, `Styles: ${styles}. Full-bleed commercial poster.`].filter(Boolean).join("\n");
 }
 

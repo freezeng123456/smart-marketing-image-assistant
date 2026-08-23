@@ -1,7 +1,7 @@
 import { shouldUseBrandKangaroo, BRAND_KANGAROO_CONSTRAINT } from "./brand-policy.mjs";
 import { inferImageMime } from "./image-utils.mjs";
 import { resolveBrandAndUserRefs, sceneRefPromptHint } from "./ref-compose.mjs";
-import { aspectPromptConstraint, resolveAspectRatio, sizeForAspectRatio } from "./aspect-ratio.mjs";
+import { aspectPromptFromRequest, resolveAspectRatio, sizeForAspectRatio } from "./aspect-ratio.mjs";
 
 function buildPrompt(request, { userCount = 0, collage = false } = {}) {
   const styles = Array.isArray(request.styles) && request.styles.length ? request.styles.join(", ") : "commercial marketing";
@@ -15,7 +15,7 @@ function buildPrompt(request, { userCount = 0, collage = false } = {}) {
   const bgFill = hasBrand
     ? "Background: bright warm orange-to-gold commercial marketing fill to all four corners (soft glow, festive light accents). Do NOT use dark night streets, deep crimson neon, black voids, or empty gray/white margins."
     : "Full-bleed commercial marketing poster; fill the entire frame with scene and color, no black empty margins.";
-  const aspect = aspectPromptConstraint(resolveAspectRatio(request));
+  const aspect = aspectPromptFromRequest(request);
   return [`Brief: ${original}`, brand, scene, followRef, aspect, bgFill, `Styles: ${styles}. Full-bleed commercial marketing poster, high quality.`]
     .filter(Boolean)
     .join("\n");

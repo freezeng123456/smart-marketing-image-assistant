@@ -56,20 +56,37 @@ export function resolveAspectRatio(request = {}) {
   return "9:16";
 }
 
-/** English prompt line: constrain composition ratio, not exact pixels. */
-export function aspectPromptConstraint(ratio) {
+/**
+ * Aspect guidance for model prompts.
+ * `ratio` MUST come from the webpage resource-slot option (already simplified, e.g. 9:16).
+ * Optional `placementLabel` is the UI slot name (e.g. 开屏广告).
+ */
+export function aspectPromptConstraint(ratio, { placementLabel = "" } = {}) {
   const value = parseAspectRatio(ratio).value;
   const [aw, ah] = value.split(":").map(Number);
   const orientation =
     aw === ah ? "square" : aw > ah ? "landscape" : "portrait";
-  // Style-consistent reframe: new layout for the target ratio; content may adapt; no letterbox.
+  const placement = String(placementLabel || "").trim();
+  const sourceLine = placement
+    ? `Target aspect ratio is taken from the webpage placement option「${placement}」: ${value} (${orientation}).`
+    : `Target aspect ratio is taken from the webpage placement option: ${value} (${orientation}).`;
+  // Style-consistent reframe: new layout for the selected ratio; content may adapt; no letterbox.
   return [
-    `Reframe this marketing creative for aspect ratio ${value} (${orientation}).`,
+    sourceLine,
+    `Reframe this marketing creative specifically for ${value} ${orientation} composition.`,
     "Keep the same visual style, color palette, lighting, materials, and brand look as the reference.",
-    "You MAY rearrange layout, rescale elements, and adapt or regenerate scene content so the poster feels intentionally designed for this ratio.",
+    "You MAY rearrange layout, rescale elements, and adapt or regenerate scene content so it feels intentionally designed for this placement ratio.",
     "Fill the entire frame edge-to-edge as a finished full-bleed poster.",
     "Do NOT leave letterbox/pillarbox bars, gray/white empty margins, or stretched warped content."
   ].join(" ");
+}
+
+/** Pull ratio + placement label from the validated request (webpage resourceSlots). */
+export function aspectPromptFromRequest(request = {}) {
+  const slot = Array.isArray(request.resourceSlots) ? request.resourceSlots[0] : null;
+  const ratio = resolveAspectRatio(request);
+  const placementLabel = slot?.label || "";
+  return aspectPromptConstraint(ratio, { placementLabel });
 }
 
 /**
