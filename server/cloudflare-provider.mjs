@@ -1,6 +1,7 @@
 import { readFile } from "node:fs/promises";
 import { fileURLToPath } from "node:url";
 import { inferImageMime, resizeForReference } from "./image-utils.mjs";
+import { shouldUseBrandKangaroo, BRAND_KANGAROO_CONSTRAINT_SHORT } from "./brand-policy.mjs";
 
 const DEFAULT_API_BASE = "https://api.cloudflare.com/client/v4";
 const DEFAULT_TEXT_MODEL = "@cf/black-forest-labs/flux-2-dev";
@@ -88,11 +89,7 @@ function structuredPrompt(request, { hasCurrent = false, hasBrandIp = false, bra
   }
 
   const subjectGuidance = hasBrandIp
-    ? [
-        "Hero: 美团袋鼠 / Meituan yellow kangaroo IP from the reference images.",
-        "Look: side or 3/4 profile; bright yellow smooth vinyl; cream belly pouch; long rounded ears; small black oval eye; separate black oval nose on the snout; short stubby limbs; thick all-yellow tail.",
-        "Keep the same mascot identity as the references; change pose and scene to fit the campaign."
-      ].join(" ")
+    ? BRAND_KANGAROO_CONSTRAINT_SHORT
     : "Follow the user prompt for the main subject.";
 
   if (isAdjustment) {
@@ -202,7 +199,7 @@ export function createCloudflareProvider({
     const isAdjustment = Boolean(request.sessionId || request.generationType === "image-edit");
     if (isAdjustment && request.contextImageUrl) references.push({ source: request.contextImageUrl, label: "current-poster" });
     // Inject the APPROVED brand kangaroo IP assets (exact yellow mascot refs), never invent a new kangaroo.
-    const useBrandKangaroo = !request.brandAsset || request.brandAsset === "brand-kangaroo";
+    const useBrandKangaroo = shouldUseBrandKangaroo(request);
     const hasBrandIp = useBrandKangaroo;
     let brandIpCount = 0;
     if (hasBrandIp) {
@@ -255,7 +252,7 @@ export function createCloudflareProvider({
   }
 
   async function requestJson(model, request, index, signal) {
-    const useBrandKangaroo = !request.brandAsset || request.brandAsset === "brand-kangaroo";
+    const useBrandKangaroo = shouldUseBrandKangaroo(request);
     const actualPrompt = structuredPrompt(request, {
       hasBrandIp: useBrandKangaroo,
       brandIpCount: useBrandKangaroo ? 1 : 0,
@@ -301,12 +298,19 @@ export function createCloudflareProvider({
 
   async function generate(request, index = 0, { signal } = {}) {
     const isAdjustment = Boolean(request.sessionId || request.generationType === "image-edit");
-    const primaryModel = isAdjustment ? editModel : textModel;
+    const primaryModel = request.modelOverride || (isAdjustment ? editModel : textModel);
+    const allowInternalFallback = !request.modelOverride;
     try {
       if (/flux-2-(klein|dev)/i.test(primaryModel)) return await requestMultipart(primaryModel, request, index, signal);
       return await requestJson(primaryModel, request, index, signal);
     } catch (primaryError) {
-      if (isAdjustment || !fallbackModel || fallbackModel === primaryModel || !fallbackEligible(primaryError)) {
+      if (
+        isAdjustment ||
+        !allowInternalFallback ||
+        !fallbackModel ||
+        fallbackModel === primaryModel ||
+        !fallbackEligible(primaryError)
+      ) {
         throw primaryError;
       }
       logger.warn?.(

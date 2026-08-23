@@ -73,37 +73,53 @@ export function createTaskService({ provider, runtimeDir, logger = console, task
         progress: 12,
         content: stageContent(12)
       });
-      const count = clampInt(task.request.imageCount, 1, 4, 1);
+      const slots = Array.isArray(task.request.resourceSlots) && task.request.resourceSlots.length
+        ? task.request.resourceSlots.slice(0, 4)
+        : null;
+      const count = slots ? slots.length : 1;
       const images = [];
 
       for (let index = 0; index < count; index += 1) {
         if (task.aborted) throw new DOMException("Aborted", "AbortError");
+        const slot = slots?.[index] || null;
+        const slotSize = slot ? `${slot.width}x${slot.height}` : task.request.size;
+        const slotLabel = slot ? `${slot.label || "资源位"} ${slotSize}` : "";
         const baseProgress = 30 + Math.round((index / count) * 52);
         updateTask(task, {
           progress: baseProgress,
-          content: index === 0 ? "正在调用品牌 IP 模型..." : `正在生成第 ${index + 1} 张图片...`
+          content: index === 0
+            ? (slotLabel ? `正在生成 ${slotLabel}...` : "正在调用生图模型...")
+            : `正在生成第 ${index + 1}/${count} 张（${slotLabel || slotSize}）...`
         });
 
-        const result = await provider.generate(task.request, index, {
-          signal: task.controller.signal
-        });
+        const result = await provider.generate(
+          {
+            ...task.request,
+            size: slotSize,
+            ratio: task.request.ratio || "custom"
+          },
+          index,
+          { signal: task.controller.signal }
+        );
         const fileName = imageFileName(index, result.mime);
         const taskDir = join(generatedDir, task.taskId);
         await mkdir(taskDir, { recursive: true });
         await writeFile(join(taskDir, fileName), result.buffer);
-        const url = new URL(`/generated/${task.taskId}/${fileName}`, task.origin).href;
+        const url = `/generated/${task.taskId}/${fileName}`; // relative: survives http tunnels & host changes
         images.push({
           id: `${task.taskId}-image-${index + 1}`,
           url,
           status: "FINISH",
           prompt: task.request.prompt,
           model: result.model || provider.name,
-          auditStatus: "PASSED"
+          auditStatus: "PASSED",
+          size: slotSize,
+          slotLabel: slot?.label || ""
         });
         updateTask(task, {
           images,
           progress: 45 + Math.round(((index + 1) / count) * 40),
-          content: index + 1 < count ? `第 ${index + 1} 张图片已完成，继续生成...` : "正在进行内容安全审核..."
+          content: index + 1 < count ? `第 ${index + 1} 张已完成，继续生成...` : "正在进行内容安全审核..."
         });
       }
 

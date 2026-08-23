@@ -68,6 +68,22 @@ export function createImageSourceLoader({ projectRoot, runtimeDir, fetchImpl = g
       }
       return readChecked(path);
     }
+    // App-relative URLs like /uploads/… and /generated/… are NOT OS absolute paths.
+    if (value.startsWith("/uploads/")) {
+      const path = safeJoin(uploadsDir, value.slice("/uploads/".length));
+      if (!path) throw new Error("Uploaded image path is invalid.");
+      return readChecked(path);
+    }
+    if (value.startsWith("/generated/")) {
+      const path = safeJoin(generatedDir, value.slice("/generated/".length));
+      if (!path) throw new Error("Generated image path is invalid.");
+      return readChecked(path);
+    }
+    if (value.startsWith("/assets/")) {
+      const path = safeJoin(projectRoot, value.slice(1));
+      if (!path) throw new Error("Asset image path is invalid.");
+      return readChecked(path);
+    }
     if (isAbsolute(value)) {
       if (!isAllowedLocalPath(value, allowedRoots)) {
         throw new Error("Local reference path is outside the project runtime.");

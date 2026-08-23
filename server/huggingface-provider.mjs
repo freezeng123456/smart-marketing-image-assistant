@@ -1,10 +1,8 @@
+import { shouldUseBrandKangaroo, BRAND_KANGAROO_CONSTRAINT } from "./brand-policy.mjs";
 function buildPrompt(request) {
   const styles = Array.isArray(request.styles) && request.styles.length ? request.styles.join(", ") : "commercial marketing";
   const original = String(request.prompt || "").trim();
-  const brand =
-    !request.brandAsset || request.brandAsset === "brand-kangaroo"
-      ? "Hero: Meituan yellow kangaroo IP, side/3-4 profile, bright yellow vinyl, cream belly pouch, small black oval eye, separate black oval nose, thick yellow tail."
-      : "";
+  const brand = shouldUseBrandKangaroo(request) ? BRAND_KANGAROO_CONSTRAINT : "";
   return [`Brief: ${original}`, brand, `Styles: ${styles}. Full-bleed commercial poster.`].filter(Boolean).join("\n");
 }
 

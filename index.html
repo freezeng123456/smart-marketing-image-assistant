@@ -9,7 +9,7 @@
     />
     <meta name="theme-color" content="#171a19" />
     <title>智能营销生图助手</title>
-    <link rel="stylesheet" href="./styles.css" />
+    <link rel="stylesheet" href="./styles.css?v=1787474771" />
   </head>
   <body>
     <header class="topbar">
@@ -22,8 +22,8 @@
           </svg>
         </span>
         <span class="brand-copy">
-          <strong>营销图片生成器</strong>
-          <small>Brand Creative Studio</small>
+          <strong>智能营销生图助手</strong>
+          <small>Smart Marketing Image</small>
         </span>
       </button>
 
@@ -42,25 +42,7 @@
     </header>
 
     <main>
-      <section class="page-view is-active" id="create-view" data-view="create">
-        <div class="hero-shell">
-          <div class="hero-copy">
-            <p class="eyebrow">AI MARKETING CREATIVE</p>
-            <h1>智能营销生图助手</h1>
-            <p>输入营销需求，快速生成品牌营销视觉素材</p>
-          </div>
-          <div class="hero-actions">
-            <button class="button button-secondary" id="history-entry" type="button">
-              <span aria-hidden="true">◴</span>
-              历史记录
-            </button>
-            <button class="button button-primary" id="new-creation" type="button">
-              <span aria-hidden="true">＋</span>
-              新建创作
-            </button>
-          </div>
-        </div>
-
+      <section class="page-section page-section-create is-active" id="create-view" data-view="create">
         <div class="workspace-shell">
           <section class="config-panel" aria-labelledby="creation-config-title">
             <div class="panel-heading">
@@ -72,6 +54,15 @@
             </div>
 
             <form id="generation-form" novalidate>
+
+              <div class="field-block" id="default-cases-block">
+                <div class="field-label-row">
+                  <label>快速开始</label>
+                  <span>进来先试这两个案例</span>
+                </div>
+                <div class="default-case-grid" id="default-cases"></div>
+              </div>
+
               <div class="field-block field-block-prominent">
                 <div class="field-label-row">
                   <label for="marketing-prompt">营销需求 <span class="required">*</span></label>
@@ -80,9 +71,9 @@
                 <div class="prompt-wrap">
                   <textarea
                     id="marketing-prompt"
-                    rows="7"
+                    rows="3"
                     maxlength="3000"
-                    placeholder="例如：生成一张七夕主题的袋鼠活动海报，竖版 1080x1920，温暖粉色调，袋鼠手持玫瑰，背景有星河和爱心，预留标题和优惠信息区域"
+                    placeholder="例如：生成一张七夕主题活动海报，竖版 1080x1920，温暖粉色调，星河与爱心氛围，预留标题和优惠信息区域"
                   ></textarea>
                   <div class="prompt-shortcut">Enter 提交 · Shift + Enter 换行</div>
                 </div>
@@ -92,64 +83,45 @@
                 <p class="validation-message" id="prompt-error" role="alert"></p>
               </div>
 
+
+
+
               <div class="field-block">
                 <div class="field-label-row">
-                  <label>营销场景快捷模板</label>
-                  <span>点击后填入需求，不会立即提交</span>
+                  <label for="model-select">生图模型</label>
+                  <span id="model-hint">调试可用普通模型</span>
                 </div>
-                <div class="template-grid" id="template-grid"></div>
+                <select id="model-select" class="model-select" aria-label="生图模型">
+                  <option value="modelscope-zimage">加载模型列表…</option>
+                </select>
+                <small id="model-exhausted-note" class="model-exhausted-note" hidden></small>
               </div>
 
               <div class="field-block">
                 <div class="field-label-row">
-                  <label>品牌 IP 选择</label>
-                  <span>默认：品牌袋鼠</span>
+                  <label>资源位尺寸 <span class="required">*</span></label>
+                  <span>（支持多选）</span>
                 </div>
-                <div class="option-card-grid option-card-grid-brand" id="brand-options"></div>
-                <div class="info-note">
-                  <span class="info-note-icon" aria-hidden="true">i</span>
-                  <span>选择「品牌袋鼠」时，系统会注入已审批的品牌袋鼠 IP 参考图（锁定外观），无需也不应另造一只不同的袋鼠。</span>
+                <div class="slot-summary" id="slot-summary">
+                  <strong id="slot-summary-count">已选 1 个资源位</strong>
+                  <p id="slot-summary-list">开屏广告 (1080×1920)</p>
                 </div>
+                <div class="slot-tags" id="slot-tags"></div>
+                <div class="slot-picker" id="slot-picker">
+                  <div class="slot-options" id="slot-options"></div>
+                  <div class="slot-custom-row" id="slot-custom-row">
+                    <span class="slot-custom-label">自定义尺寸</span>
+                    <label>宽 <input id="custom-width" type="number" min="200" max="4096" step="1" value="800" /></label>
+                    <span>×</span>
+                    <label>高 <input id="custom-height" type="number" min="200" max="4096" step="1" value="600" /></label>
+                    <button class="button button-secondary slot-add-btn" id="add-custom-slot" type="button">+ 添加</button>
+                  </div>
+                </div>
+                <span id="size-preview" hidden>1080x1920</span>
+                <div class="ratio-grid" id="ratio-options" hidden></div>
+                <div class="custom-size-row" id="custom-size-row" hidden></div>
               </div>
 
-              <div class="form-grid form-grid-two">
-                <div class="field-block compact-block">
-                  <div class="field-label-row"><label>生成类型</label></div>
-                  <div class="segmented" id="generation-types"></div>
-                </div>
-                <div class="field-block compact-block">
-                  <div class="field-label-row"><label>图片数量</label></div>
-                  <div class="segmented" id="image-counts"></div>
-                </div>
-              </div>
-
-              <div class="field-block">
-                <div class="field-label-row">
-                  <label>图片比例</label>
-                  <span id="size-preview">1080x1920</span>
-                </div>
-                <div class="ratio-grid" id="ratio-options"></div>
-                <div class="custom-size-row" id="custom-size-row" hidden>
-                  <label>
-                    宽度
-                    <input id="custom-width" type="number" min="320" max="4096" step="1" value="1080" />
-                  </label>
-                  <span>×</span>
-                  <label>
-                    高度
-                    <input id="custom-height" type="number" min="320" max="4096" step="1" value="1920" />
-                  </label>
-                  <small>支持 320–4096 px</small>
-                </div>
-              </div>
-
-              <div class="field-block">
-                <div class="field-label-row">
-                  <label>风格偏好</label>
-                  <span id="style-limit">已选 2 / 3</span>
-                </div>
-                <div class="pill-group" id="style-options"></div>
-              </div>
 
               <div class="field-block">
                 <div class="field-label-row">
@@ -168,7 +140,7 @@
                   <div>
                     <strong>点击或拖拽上传参考图</strong>
                     <p>支持 PNG、JPG、JPEG、WEBP；单张不超过 10MB；最多 4 张</p>
-                    <small>可上传商品图、场景参考图或构图参考图。品牌 IP 素材由系统统一管理。</small>
+                    <small>可上传商品图、场景参考图或构图参考图。仅当文案提到美团时才会自动加入品牌袋鼠 IP。</small>
                   </div>
                 </div>
                 <div class="reference-list" id="reference-list"></div>
@@ -177,7 +149,7 @@
               <div class="submit-dock">
                 <div class="submit-summary" id="submit-summary">
                   <span class="summary-dot"></span>
-                  <span>品牌袋鼠 · 9:16 · 2 张</span>
+                  <span>无品牌 IP · 开屏广告 · 1 个资源位</span>
                 </div>
                 <button class="button button-generate" id="generate-button" type="submit">
                   <span class="button-icon" aria-hidden="true">✦</span>
@@ -187,27 +159,7 @@
             </form>
           </section>
 
-          <section class="creation-stage" aria-live="polite">
-            <div class="empty-stage" id="empty-stage">
-              <div class="stage-orbit" aria-hidden="true">
-                <div class="orbit-ring orbit-ring-one"></div>
-                <div class="orbit-ring orbit-ring-two"></div>
-                <div class="stage-kangaroo">K</div>
-                <span class="orbit-star orbit-star-one">✦</span>
-                <span class="orbit-star orbit-star-two">✧</span>
-                <span class="orbit-star orbit-star-three">•</span>
-              </div>
-              <p class="stage-eyebrow">READY TO CREATE</p>
-              <h2>把营销想法变成品牌视觉</h2>
-              <p>填写左侧创作配置后开始生成。任务提交、轮询、取消与多轮调整都将在当前页面完成。</p>
-              <div class="stage-feature-list">
-                <span>异步任务</span>
-                <span>品牌 IP 注入</span>
-                <span>多轮调整</span>
-                <span>版本留存</span>
-              </div>
-            </div>
-
+          <section class="creation-stage" id="creation-result" aria-live="polite">
             <section class="progress-card" id="progress-card" hidden>
               <div class="progress-head">
                 <div>
@@ -222,7 +174,7 @@
                 </div>
                 <div class="progress-copy">
                   <strong id="progress-message">正在提交任务...</strong>
-                  <p>任务采用异步执行，页面无需刷新。你可以切换到历史记录，当前状态仍会保留。</p>
+                  <p>任务采用异步执行，页面无需刷新。也可以下滑到下方生成历史查看，当前状态仍会保留。</p>
                 </div>
               </div>
               <div class="progress-bar" aria-hidden="true"><span id="progress-bar-fill"></span></div>
@@ -264,7 +216,7 @@
                   <div>
                     <p class="panel-kicker">CONTINUE REFINING</p>
                     <h3>继续调整</h3>
-                    <p>如果需要调整袋鼠的姿势、背景细节、色彩倾向或构图比例，随时告诉我～</p>
+                    <p>如果需要调整主体姿势、背景细节、色彩倾向或构图比例，随时告诉我～</p>
                   </div>
                 </div>
                 <div class="adjustment-pills" id="adjustment-pills"></div>
@@ -272,7 +224,7 @@
                   <textarea
                     id="adjustment-input"
                     rows="3"
-                    placeholder="描述你想调整的内容，例如：把袋鼠改成奔跑姿势，背景换成海边日落……"
+                    placeholder="描述你想调整的内容，例如：把主体改成奔跑姿势，背景换成海边日落……"
                   ></textarea>
                   <div class="custom-adjustment-footer">
                     <div class="adjustment-examples" id="adjustment-examples"></div>
@@ -296,7 +248,7 @@
         </div>
       </section>
 
-      <section class="page-view" id="history-view" data-view="history" hidden>
+      <section class="page-section" id="history-view" data-view="history">
         <div class="content-shell">
           <div class="page-heading-row">
             <div>
@@ -329,7 +281,7 @@
         </div>
       </section>
 
-      <section class="page-view" id="portfolio-view" data-view="portfolio" hidden>
+      <section class="page-section" id="portfolio-view" data-view="portfolio">
         <div class="content-shell">
           <div class="page-heading-row portfolio-heading">
             <div>
@@ -400,6 +352,6 @@
     <div class="toast-region" id="toast-region" aria-live="polite" aria-atomic="true"></div>
 
     <script src="./config.js"></script>
-    <script type="module" src="./src/app.js"></script>
+    <script type="module" src="./src/app.js?v=1787474771"></script>
   </body>
 </html>

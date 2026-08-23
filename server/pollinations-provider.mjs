@@ -1,3 +1,4 @@
+import { shouldUseBrandKangaroo, BRAND_KANGAROO_CONSTRAINT } from "./brand-policy.mjs";
 import { normalizeModelSize } from "./cloudflare-provider.mjs";
 
 const DEFAULT_BASE = "https://image.pollinations.ai/prompt";
@@ -6,10 +7,7 @@ const AUTH_GENERATIONS = "https://gen.pollinations.ai/v1/images/generations";
 function buildPrompt(request) {
   const styles = Array.isArray(request.styles) && request.styles.length ? request.styles.join(", ") : "commercial marketing";
   const original = String(request.prompt || "").trim();
-  const brand =
-    !request.brandAsset || request.brandAsset === "brand-kangaroo"
-      ? "Hero: 美团袋鼠 / Meituan yellow kangaroo IP, side or 3/4 profile, bright yellow smooth vinyl, cream belly pouch, long rounded ears, small black oval eye, separate black oval nose, thick all-yellow tail."
-      : "";
+  const brand = shouldUseBrandKangaroo(request) ? BRAND_KANGAROO_CONSTRAINT : "";
   return [
     `Brief: ${original}`,
     brand,
@@ -46,7 +44,7 @@ function enqueue(job) {
 export function createPollinationsProvider({
   apiKey = process.env.POLLINATIONS_API_KEY || "",
   apiBase = process.env.POLLINATIONS_API_BASE || (apiKey ? AUTH_GENERATIONS : DEFAULT_BASE),
-  model = process.env.POLLINATIONS_MODEL || (apiKey ? "zimage" : "flux"),
+  model = process.env.POLLINATIONS_MODEL || (apiKey ? "flux" : "flux"),
   outputMaxDimension = Number(process.env.POLLINATIONS_OUTPUT_MAX_DIMENSION || process.env.CLOUDFLARE_OUTPUT_MAX_DIMENSION || 768),
   maxRetries = Number(process.env.POLLINATIONS_MAX_RETRIES || 4),
   fetchImpl = globalThis.fetch,
@@ -56,13 +54,14 @@ export function createPollinationsProvider({
   const useOpenAICompat = /\/v1\/images\/generations\/?$/.test(apiBase) || Boolean(apiKey);
 
   async function generateOnce(request, index = 0, { signal } = {}) {
+    const activeModel = request.modelOverride || model;
     const prompt = buildPrompt(request);
     const { width, height } = normalizeModelSize(request.size, outputMaxDimension);
     const seed = (Date.now() + index * 7919) % 2147483647;
 
     if (useOpenAICompat) {
       const endpoint = apiBase.includes("/v1/images/generations") ? apiBase : AUTH_GENERATIONS;
-      logger.info?.(`[Pollinations] generations ${width}x${height} via ${model} (auth)`);
+      logger.info?.(`[Pollinations] generations ${width}x${height} via ${activeModel} (auth)`);
       const response = await fetchImpl(endpoint, {
         method: "POST",
         signal,
@@ -73,7 +72,7 @@ export function createPollinationsProvider({
         },
         body: JSON.stringify({
           prompt,
-          model,
+          model: activeModel,
           size: `${width}x${height}`,
           response_format: "b64_json",
           seed
@@ -106,14 +105,14 @@ export function createPollinationsProvider({
       } else {
         throw new Error("Pollinations returned no image data");
       }
-      return { buffer, mime, model: `pollinations/${model}`, prompt };
+      return { buffer, mime, model: `pollinations/${activeModel}`, prompt };
     }
 
     const url = new URL(`${apiBase.replace(/\/$/, "")}/${encodeURIComponent(prompt)}`);
     url.searchParams.set("width", String(width));
     url.searchParams.set("height", String(height));
     url.searchParams.set("nologo", "true");
-    url.searchParams.set("model", model);
+    url.searchParams.set("model", activeModel);
     url.searchParams.set("seed", String(seed));
     url.searchParams.set("enhance", "true");
     const headers = { Accept: "image/*" };
@@ -128,7 +127,7 @@ export function createPollinationsProvider({
     }
     const buffer = Buffer.from(await response.arrayBuffer());
     const mime = response.headers.get("content-type") || "image/jpeg";
-    return { buffer, mime, model: `pollinations/${model}`, prompt };
+    return { buffer, mime, model: `pollinations/${activeModel}`, prompt };
   }
 
   async function generate(request, index = 0, options = {}) {
@@ -159,7 +158,7 @@ export function createPollinationsProvider({
   };
 }
 
-export function createFailoverProvider({ primary, fallback, logger = console } = {}) {
+export function createFailoverProvider({ primary, fallback, logger = console, onQuotaError = null } = {}) {
   if (!primary?.generate) throw new Error("primary provider required");
   if (!fallback?.generate) throw new Error("fallback provider required");
 
@@ -169,7 +168,7 @@ export function createFailoverProvider({ primary, fallback, logger = console } =
     return (
       status === 402 ||
       status === 429 ||
-      /neuron|quota|rate.?limit|used up|free allocation|billing|credit|queue full|insufficient/i.test(message)
+      /neuron|quota|rate.?limit|used up|free allocation|billing|credit|queue full|insufficient|exhausted|余额不足|额度/i.test(message)
     );
   }
 
@@ -178,6 +177,7 @@ export function createFailoverProvider({ primary, fallback, logger = console } =
       return await primary.generate(request, index, options);
     } catch (error) {
       if (!quotaLike(error)) throw error;
+      try { await onQuotaError?.(error); } catch {}
       logger.warn?.(`[Failover] primary failed (${error.status || "n/a"}): ${error.message}. Trying ${fallback.name}.`);
       return fallback.generate(request, index, options);
     }

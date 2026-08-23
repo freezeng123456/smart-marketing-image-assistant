@@ -17,7 +17,7 @@ console.log(`  Function adapter:  http://localhost:${address.port}/?api=function
 console.log(`  Function health:   http://localhost:${address.port}/functions/health`);
 console.log(
   hasRealBackend
-    ? `\nReal Cloudflare Workers AI backend is enabled (${app.provider.textModel}).\n`
+    ? `\nReal image backend is enabled (${app.provider.name || app.provider.textModel || "router"}).\n`
     : "\nReal backend is disabled because server-side Cloudflare credentials are missing. Mock mode remains available.\n"
 );
 

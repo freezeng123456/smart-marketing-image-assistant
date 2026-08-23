@@ -75,5 +75,19 @@ export const store = {
   clearAll() {
     if (!canStore) return;
     Object.values(KEYS).forEach((key) => localStorage.removeItem(key));
+  },
+
+  /**
+   * Keep the two starter demo sessions at the front of history, as if already generated.
+   * Always refreshes demo payloads so asset/path updates apply for returning users.
+   */
+  ensureDemoSessions(demoSessions) {
+    const demos = Array.isArray(demoSessions) ? demoSessions : [];
+    if (!demos.length) return this.getSessions();
+    const demoIds = new Set(demos.map((item) => item.sessionId));
+    const others = this.getSessions().filter((item) => !demoIds.has(item.sessionId) && !String(item.sessionId || "").startsWith("demo-session-"));
+    const next = [...demos, ...others];
+    this.saveSessions(next);
+    return next;
   }
 };

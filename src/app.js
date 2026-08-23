@@ -1,5 +1,8 @@
 import {
   TEMPLATE_OPTIONS,
+  DEFAULT_CASES,
+  EXAMPLE_CATEGORIES,
+  RESOURCE_SLOT_OPTIONS,
   BRAND_OPTIONS,
   GENERATION_TYPES,
   RATIO_OPTIONS,
@@ -9,7 +12,9 @@ import {
   MORE_ADJUSTMENT_EXAMPLES,
   PROGRESS_STEPS,
   DEFAULT_FORM,
-  STATUS_LABELS
+  STATUS_LABELS,
+  resolveBrandAssetFromPrompt,
+  buildDemoSessions
 } from "./constants.js";
 import { api } from "./api/client.js";
 import { store } from "./store.js";
@@ -29,7 +34,7 @@ const $ = (selector, root = document) => root.querySelector(selector);
 const $$ = (selector, root = document) => Array.from(root.querySelectorAll(selector));
 
 const els = {
-  views: $$(".page-view"),
+  views: $$(".page-section, .page-view"),
   navItems: $$("[data-nav]"),
   apiBadge: $("#api-mode-badge"),
   form: $("#generation-form"),
@@ -40,9 +45,17 @@ const els = {
   brandOptions: $("#brand-options"),
   generationTypes: $("#generation-types"),
   imageCounts: $("#image-counts"),
+  modelSelect: $("#model-select"),
+  modelHint: $("#model-hint"),
+  modelExhaustedNote: $("#model-exhausted-note"),
   ratioOptions: $("#ratio-options"),
   sizePreview: $("#size-preview"),
   customSizeRow: $("#custom-size-row"),
+  slotSummaryCount: $("#slot-summary-count"),
+  slotSummaryList: $("#slot-summary-list"),
+  slotTags: $("#slot-tags"),
+  slotOptions: $("#slot-options"),
+  addCustomSlot: $("#add-custom-slot"),
   customWidth: $("#custom-width"),
   customHeight: $("#custom-height"),
   styleOptions: $("#style-options"),
@@ -57,6 +70,7 @@ const els = {
   newCreation: $("#new-creation"),
   historyEntry: $("#history-entry"),
   openExamples: $("#open-examples"),
+  defaultCases: $("#default-cases"),
   emptyStage: $("#empty-stage"),
   progressCard: $("#progress-card"),
   errorCard: $("#error-card"),
@@ -115,9 +129,11 @@ const state = {
   form: {
     ...structuredClone(DEFAULT_FORM),
     ...(persistedDraft || {}),
-    styles: Array.isArray(persistedDraft?.styles)
-      ? persistedDraft.styles.slice(0, 3)
-      : [...DEFAULT_FORM.styles],
+    brandAsset: "none",
+    styles: [],
+    selectedSlots: Array.isArray(persistedDraft?.selectedSlots) && persistedDraft.selectedSlots.length
+      ? persistedDraft.selectedSlots
+      : structuredClone(DEFAULT_FORM.selectedSlots),
     referenceImages: restoredReferences.map((item) => ({
       ...item,
       id: item.id || uid("reference"),
@@ -125,21 +141,24 @@ const state = {
       status: "ready"
     }))
   },
-  sessions: store.getSessions(),
+  sessions: store.ensureDemoSessions(buildDemoSessions()),
   currentSessionId: null,
   activeTask: store.getActiveTask(),
   partialImages: [],
   pollTimer: null,
   pollErrors: 0,
   uploadingCount: 0,
-  selectedExample: TEMPLATE_OPTIONS[0].id,
+  selectedExample: EXAMPLE_CATEGORIES[0]?.id || "festival",
+  selectedCaseId: null,
   historySearch: "",
   historyStatus: "all",
   portfolioCategory: "全部",
   editingImageUrl: null,
   lightboxImages: [],
   lightboxIndex: 0,
-  lastErrorKind: "FAILED"
+  lastErrorKind: "FAILED",
+  modelCatalog: [],
+  exhaustedChannels: {}
 };
 
 function persistSessions() {
@@ -149,12 +168,14 @@ function persistSessions() {
 function persistDraft() {
   store.saveDraft({
     prompt: state.form.prompt,
-    brandAsset: state.form.brandAsset,
+    brandAsset: state.form.brandAsset || "none",
     generationType: state.form.generationType,
+    modelId: state.form.modelId,
     ratio: state.form.ratio,
     customWidth: state.form.customWidth,
     customHeight: state.form.customHeight,
-    imageCount: state.form.imageCount,
+    selectedSlots: state.form.selectedSlots || [],
+    imageCount: 1,
     styles: [...state.form.styles],
     referenceImages: state.form.referenceImages
       .filter((item) => item.status === "ready" && item.url && !String(item.url).startsWith("blob:"))
@@ -202,7 +223,7 @@ function getUsableImages(version) {
 }
 
 function brandLabel(value) {
-  return BRAND_OPTIONS.find((item) => item.value === value)?.label || value || "—";
+  return BRAND_OPTIONS.find((item) => item.value === value)?.label || value || "无品牌 IP";
 }
 
 function ratioLabel(value) {
@@ -216,6 +237,26 @@ function statusClass(status) {
   if (normalized === "TIMEOUT") return "status-timeout";
   if (normalized === "ABORTED") return "status-aborted";
   return "status-failed";
+}
+
+
+function normalizeAssetUrl(url) {
+  const raw = String(url || "").trim();
+  if (!raw) return "";
+  try {
+    const parsed = new URL(raw, location.href);
+    // Same-origin absolute links from wrong protocol/host (e.g. https bore while page is http)
+    // rewrite to path-only so <img> follows the current page origin.
+    if (
+      parsed.pathname.startsWith("/generated/") ||
+      parsed.pathname.startsWith("/uploads/")
+    ) {
+      return `${parsed.pathname}${parsed.search || ""}`;
+    }
+    return parsed.href;
+  } catch {
+    return raw;
+  }
 }
 
 function isSafeImageUrl(url) {
@@ -238,20 +279,59 @@ function showToast(message, type = "info", duration = 3200) {
   window.setTimeout(() => toast.remove(), duration);
 }
 
-function setView(view) {
+function setNavActive(view) {
   state.currentView = view;
   els.views.forEach((section) => {
-    const active = section.dataset.view === view;
-    section.hidden = !active;
-    section.classList.toggle("is-active", active);
+    section.classList.toggle("is-active", section.dataset.view === view);
   });
   $$(".nav-item").forEach((button) =>
     button.classList.toggle("is-active", button.dataset.nav === view)
   );
+}
+
+function scrollToSection(view, { behavior = "smooth", focusResult = false } = {}) {
+  const section = document.querySelector(`.page-section[data-view="${view}"], .page-view[data-view="${view}"]`);
+  if (!section) return;
+  state.navLockUntil = Date.now() + 900;
+  setNavActive(view);
   if (view === "history") renderHistory();
   if (view === "portfolio") renderPortfolio();
   if (view === "create") renderStageFromState();
-  window.scrollTo({ top: 0, behavior: "smooth" });
+
+  let target = section;
+  if (view === "create" && focusResult) {
+    target = document.getElementById("creation-result") || section;
+  }
+  target.scrollIntoView({ behavior, block: "start" });
+}
+
+function setView(view) {
+  // Back-compat: callers that used page switching now jump within the long page.
+  scrollToSection(view, { behavior: "smooth" });
+}
+
+function setupSectionSpy() {
+  const sections = $$(".page-section[data-view], .page-view[data-view]");
+  if (!sections.length || typeof IntersectionObserver !== "function") return;
+  const observer = new IntersectionObserver(
+    (entries) => {
+      if (Date.now() < (state.navLockUntil || 0)) return;
+      const visible = entries
+        .filter((entry) => entry.isIntersecting)
+        .sort((a, b) => b.intersectionRatio - a.intersectionRatio);
+      const top = visible[0];
+      if (!top?.target?.dataset?.view) return;
+      const view = top.target.dataset.view;
+      if (view !== state.currentView) setNavActive(view);
+    },
+    {
+      root: null,
+      // Bias toward the section sitting under the sticky topbar
+      rootMargin: "-20% 0px -55% 0px",
+      threshold: [0.08, 0.18, 0.32, 0.5]
+    }
+  );
+  sections.forEach((section) => observer.observe(section));
 }
 
 function setApiBadge() {
@@ -265,8 +345,207 @@ function setApiBadge() {
     : "正在调用真实 NoCode Function：/functions/*";
 }
 
+
+function renderDefaultCases() {
+  if (!els.defaultCases) return;
+  els.defaultCases.innerHTML = DEFAULT_CASES.map((item) => {
+    const thumb =
+      item.referenceImages?.[0]?.previewUrl ||
+      (item.id === "meituan-kangaroo" ? "/assets/brand-kangaroo.png" : "");
+    const thumbClass = item.id === "meituan-kangaroo" ? "default-case-thumb is-kangaroo" : "default-case-thumb";
+    return `
+      <button class="default-case-card ${state.selectedCaseId === item.id ? "is-selected" : ""}" type="button" data-default-case="${escapeHtml(item.id)}">
+        <img class="${thumbClass}" src="${escapeHtml(thumb)}" alt="${escapeHtml(item.label)}" />
+        <div class="default-case-meta">
+          <strong>${escapeHtml(item.label)}</strong>
+          <span>${escapeHtml(item.blurb || "")}</span>
+        </div>
+      </button>
+    `;
+  }).join("");
+}
+
+function applyDefaultCase(item, { toast = true } = {}) {
+  if (!item) return;
+  state.selectedCaseId = item.id;
+  state.form.prompt = item.prompt;
+  state.form.ratio = item.ratio || state.form.ratio;
+  if (Array.isArray(item.selectedSlots) && item.selectedSlots.length) {
+    state.form.selectedSlots = structuredClone(item.selectedSlots);
+  }
+  state.form.modelId = item.modelId || state.form.modelId;
+  state.form.brandAsset = item.brandAsset || resolveBrandAssetFromPrompt(item.prompt);
+  state.form.referenceImages = (item.referenceImages || []).map((ref) => ({
+    id: ref.id || uid("reference"),
+    fileName: ref.fileName || "reference.png",
+    url: ref.url,
+    previewUrl: ref.previewUrl || ref.url,
+    status: "ready",
+    size: ref.size || 0
+  }));
+  if (els.prompt) {
+    els.prompt.value = item.prompt;
+    els.promptCount.textContent = `${item.prompt.length} / 3000`;
+    els.promptError.textContent = "";
+  }
+  syncFormToDom();
+  renderDefaultCases();
+  renderReferences();
+  renderModelSelect();
+  if (state.form.referenceImages.length) preferReliableImg2ImgModel({ toast: false });
+  updateSummary();
+  persistDraft();
+  if (item.sessionId) {
+    state.sessions = store.ensureDemoSessions(buildDemoSessions());
+    if (getSession(item.sessionId)) {
+      // Keep the case form fields (incl. referenceImages) already applied above.
+      const refs = state.form.referenceImages;
+      const modelId = state.form.modelId;
+      loadSession(item.sessionId, false);
+      state.form.referenceImages = refs;
+      state.form.modelId = modelId;
+      state.selectedCaseId = item.id;
+      syncFormToDom();
+      renderDefaultCases();
+      renderReferences();
+      renderModelSelect();
+      updateSummary();
+    }
+  }
+  if (toast) showToast(`已载入「${item.label}」案例（含历史结果）。`, "success");
+}
+
+
+function normalizeSlots(slots) {
+  return (Array.isArray(slots) ? slots : [])
+    .map((slot) => ({
+      id: String(slot.id || `custom-${slot.width}x${slot.height}`),
+      label: String(slot.label || "自定义"),
+      width: Math.round(Number(slot.width) || 0),
+      height: Math.round(Number(slot.height) || 0)
+    }))
+    .filter((slot) => slot.width >= 200 && slot.height >= 200 && slot.width <= 4096 && slot.height <= 4096);
+}
+
+function slotKey(slot) {
+  return `${slot.id}:${slot.width}x${slot.height}`;
+}
+
+function getSelectedSlots() {
+  const slots = normalizeSlots(state.form.selectedSlots);
+  if (slots.length) return slots;
+  return [{ id: "splash", label: "开屏广告", width: 1080, height: 1920 }];
+}
+
+function renderResourceSlots() {
+  const selected = getSelectedSlots();
+  state.form.selectedSlots = selected;
+  if (els.slotSummaryCount) {
+    els.slotSummaryCount.textContent = `已选 ${selected.length} 个资源位`;
+  }
+  if (els.slotSummaryList) {
+    els.slotSummaryList.textContent = selected.map((slot) => `${slot.label} (${slot.width}×${slot.height})`).join("、");
+  }
+  if (els.slotTags) {
+    els.slotTags.innerHTML = selected
+      .map(
+        (slot) => `
+        <span class="slot-tag">
+          ${escapeHtml(slot.label)} ${slot.width}×${slot.height}
+          <button type="button" data-remove-slot="${escapeHtml(slotKey(slot))}" aria-label="移除">✕</button>
+        </span>`
+      )
+      .join("");
+  }
+  if (els.slotOptions) {
+    els.slotOptions.innerHTML = RESOURCE_SLOT_OPTIONS.map((item) => {
+      const active = selected.some((slot) => slot.id === item.id && slot.width === item.width && slot.height === item.height);
+      return `
+        <button class="slot-option ${active ? "is-selected" : ""}" type="button" data-toggle-slot="${escapeHtml(item.id)}">
+          <span class="slot-option-main">
+            <strong>${escapeHtml(item.label)}</strong>
+            <span>${item.width}×${item.height}${item.tip ? ` · ${escapeHtml(item.tip)}` : ""}</span>
+          </span>
+          <span class="slot-option-check">${active ? "✓" : ""}</span>
+        </button>`;
+    }).join("");
+  }
+  // Keep legacy size preview in sync with first slot
+  const first = selected[0];
+  if (first) {
+    state.form.ratio = "custom";
+    state.form.customWidth = first.width;
+    state.form.customHeight = first.height;
+    if (els.sizePreview) els.sizePreview.textContent = `${first.width}x${first.height}`;
+  }
+}
+
+function toggleResourceSlot(slotId) {
+  const option = RESOURCE_SLOT_OPTIONS.find((item) => item.id === slotId);
+  if (!option) return;
+  const selected = getSelectedSlots();
+  const exists = selected.findIndex((slot) => slot.id === option.id && slot.width === option.width && slot.height === option.height);
+  if (exists >= 0) {
+    if (selected.length === 1) {
+      showToast("至少保留一个资源位尺寸。", "error");
+      return;
+    }
+    selected.splice(exists, 1);
+  } else {
+    if (selected.length >= 4) {
+      showToast("一次最多选择 4 个资源位。", "error");
+      return;
+    }
+    selected.push({ id: option.id, label: option.label, width: option.width, height: option.height });
+  }
+  state.form.selectedSlots = selected;
+  renderResourceSlots();
+  updateSummary();
+  persistDraft();
+}
+
+function removeResourceSlot(key) {
+  const selected = getSelectedSlots().filter((slot) => slotKey(slot) !== key);
+  if (!selected.length) {
+    showToast("至少保留一个资源位尺寸。", "error");
+    return;
+  }
+  state.form.selectedSlots = selected;
+  renderResourceSlots();
+  updateSummary();
+  persistDraft();
+}
+
+function addCustomResourceSlot() {
+  const width = Math.round(Number(els.customWidth?.value || state.form.customWidth || 0));
+  const height = Math.round(Number(els.customHeight?.value || state.form.customHeight || 0));
+  if (width < 200 || height < 200 || width > 4096 || height > 4096) {
+    showToast("自定义尺寸需在 200–4096 px 之间。", "error");
+    return;
+  }
+  const selected = getSelectedSlots();
+  if (selected.length >= 4) {
+    showToast("一次最多选择 4 个资源位。", "error");
+    return;
+  }
+  const id = `custom-${width}x${height}`;
+  if (selected.some((slot) => slot.width === width && slot.height === height)) {
+    showToast("该尺寸已添加。", "error");
+    return;
+  }
+  selected.push({ id, label: "自定义", width, height });
+  state.form.selectedSlots = selected;
+  state.form.customWidth = width;
+  state.form.customHeight = height;
+  renderResourceSlots();
+  updateSummary();
+  persistDraft();
+  showToast(`已添加自定义 ${width}×${height}。`, "success");
+}
+
 function renderStaticControls() {
-  els.templateGrid.innerHTML = TEMPLATE_OPTIONS.map(
+  renderDefaultCases();
+  if (els.templateGrid) els.templateGrid.innerHTML = TEMPLATE_OPTIONS.map(
     (item) => `
       <button class="template-card" type="button" data-template-id="${escapeHtml(item.id)}">
         <span class="template-icon">${escapeHtml(item.icon)}</span>
@@ -275,28 +554,34 @@ function renderStaticControls() {
     `
   ).join("");
 
-  els.brandOptions.innerHTML = BRAND_OPTIONS.map(
-    (item) => `
-      <button class="option-card" type="button" data-brand="${escapeHtml(item.value)}">
-        <span class="option-card-symbol">${escapeHtml(item.icon)}</span>
-        <span>${escapeHtml(item.label)}</span>
-      </button>
-    `
-  ).join("");
+  if (els.brandOptions) {
+    els.brandOptions.innerHTML = BRAND_OPTIONS.map(
+      (item) => `
+        <button class="option-card" type="button" data-brand="${escapeHtml(item.value)}">
+          <span class="option-card-symbol">${escapeHtml(item.icon)}</span>
+          <span>${escapeHtml(item.label)}</span>
+        </button>
+      `
+    ).join("");
+  }
 
-  els.generationTypes.innerHTML = GENERATION_TYPES.map(
-    (item) => `
-      <button class="segment-button" type="button" data-generation-type="${escapeHtml(item.value)}">
-        ${escapeHtml(item.label)}
-      </button>
-    `
-  ).join("");
+  if (els.generationTypes) {
+    els.generationTypes.innerHTML = GENERATION_TYPES.map(
+      (item) => `
+        <button class="segment-button" type="button" data-generation-type="${escapeHtml(item.value)}">
+          ${escapeHtml(item.label)}
+        </button>
+      `
+    ).join("");
+  }
 
-  els.imageCounts.innerHTML = IMAGE_COUNTS.map(
-    (count) => `
-      <button class="segment-button" type="button" data-image-count="${count}">${count} 张</button>
-    `
-  ).join("");
+  if (els.imageCounts) {
+    els.imageCounts.innerHTML = IMAGE_COUNTS.map(
+      (count) => `
+        <button class="segment-button" type="button" data-image-count="${count}">${count} 张</button>
+      `
+    ).join("");
+  }
 
   const shapeMap = {
     "1:1": [20, 20],
@@ -306,19 +591,13 @@ function renderStaticControls() {
     "9:16": [14, 25],
     custom: [21, 18]
   };
-  els.ratioOptions.innerHTML = RATIO_OPTIONS.map((item) => {
-    const [width, height] = shapeMap[item.value] || [18, 22];
-    return `
-      <button class="ratio-button" type="button" data-ratio="${escapeHtml(item.value)}">
-        <span class="ratio-shape" style="--shape-w:${width}px;--shape-h:${height}px"></span>
-        ${escapeHtml(item.label)}
-      </button>
-    `;
-  }).join("");
+  renderResourceSlots();
 
-  els.styleOptions.innerHTML = STYLE_OPTIONS.map(
+  if (els.styleOptions) {
+    els.styleOptions.innerHTML = STYLE_OPTIONS.map(
     (style) => `<button class="style-pill" type="button" data-style="${escapeHtml(style)}">${escapeHtml(style)}</button>`
   ).join("");
+  }
 
   els.adjustmentPills.innerHTML = ADJUSTMENT_OPTIONS.map(
     (item) => `
@@ -339,6 +618,142 @@ function renderStaticControls() {
   ).join("");
 
   renderExampleModal();
+}
+
+
+function channelLabel(channel) {
+  return (
+    {
+      modelscope: "魔搭",
+      siliconflow: "硅基流动",
+      cloudflare: "Cloudflare",
+      pollinations: "Pollinations"
+    }[channel] || channel
+  );
+}
+
+function preferReliableImg2ImgModel({ toast = false } = {}) {
+  const hasRefs = state.form.referenceImages.some((item) => item.status === "ready" && item.url);
+  if (!hasRefs) return false;
+  const models = state.modelCatalog.length ? state.modelCatalog : [];
+  const current = models.find((item) => item.id === state.form.modelId);
+  if (current?.reliableImg2Img && !current.disabled) return false;
+  const next =
+    models.find((item) => item.reliableImg2Img && !item.disabled) ||
+    models.find((item) => item.id === "modelscope-qwen-edit" && !item.disabled);
+  if (!next) return false;
+  state.form.modelId = next.id;
+  renderModelSelect();
+  updateSummary();
+  if (toast) {
+    showToast(`已切换到更适合图生图的模型：${next.label.split("·")[0].trim()}`, "success");
+  }
+  return true;
+}
+
+function renderModelSelect() {
+  if (!els.modelSelect) return;
+  const models = state.modelCatalog.length
+    ? state.modelCatalog
+    : [
+        {
+          id: state.form.modelId || "modelscope-zimage",
+          label: "魔搭 · Z-Image-Turbo（调试快）",
+          channel: "modelscope",
+          disabled: false,
+          exhausted: false
+        }
+      ];
+
+  let selected = state.form.modelId || models[0]?.id;
+  const selectedEntry = models.find((item) => item.id === selected);
+  if (!selectedEntry || selectedEntry.disabled) {
+    const firstOk = models.find((item) => !item.disabled);
+    if (firstOk) selected = firstOk.id;
+  }
+  state.form.modelId = selected;
+
+  els.modelSelect.innerHTML = models
+    .map((item) => {
+      const suffix = item.exhausted
+        ? "（额度已用尽）"
+        : item.available === false
+          ? "（未配置）"
+          : "";
+      return `<option value="${escapeHtml(item.id)}" ${item.disabled ? "disabled" : ""} ${
+        item.id === selected ? "selected" : ""
+      }>${escapeHtml(item.label)}${suffix}</option>`;
+    })
+    .join("");
+
+  const exhaustedNames = [
+    ...new Set(models.filter((item) => item.exhausted).map((item) => channelLabel(item.channel)))
+  ];
+  els.modelSelect.classList.toggle("is-has-exhausted", exhaustedNames.length > 0);
+  if (els.modelExhaustedNote) {
+    if (exhaustedNames.length) {
+      els.modelExhaustedNote.hidden = false;
+      els.modelExhaustedNote.textContent = `${exhaustedNames.join("、")} 通道额度不足，相关模型已置灰。可换其他通道继续调试。`;
+    } else {
+      els.modelExhaustedNote.hidden = true;
+      els.modelExhaustedNote.textContent = "";
+    }
+  }
+  if (els.modelHint) {
+    const current = models.find((item) => item.id === selected);
+    els.modelHint.textContent = current?.tier === "debug" ? "调试模型 · 支持图生图" : "支持图生图";
+  }
+}
+
+async function refreshModels({ silent = false } = {}) {
+  try {
+    const payload = await api.listModels();
+    state.modelCatalog = Array.isArray(payload.models) ? payload.models : [];
+    state.exhaustedChannels = payload.exhausted || {};
+    if (!state.form.modelId && payload.defaultModelId) {
+      state.form.modelId = payload.defaultModelId;
+    }
+    renderModelSelect();
+    persistDraft();
+  } catch (error) {
+    if (!silent) {
+      showToast(`模型列表加载失败：${normalizeErrorMessage(error)}`, "error");
+    }
+    renderModelSelect();
+  }
+}
+
+function maybeMarkExhaustedFromError(message = "") {
+  const text = String(message || "");
+  const map = [
+    [/cloudflare|neuron|workers ai/i, "cloudflare"],
+    [/modelscope|魔搭|dashscope|qwen-image|z-image/i, "modelscope"],
+    [/silicon|kolors|硅基/i, "siliconflow"],
+    [/pollinations/i, "pollinations"]
+  ];
+  let changed = false;
+  for (const [re, channel] of map) {
+    if (re.test(text)) {
+      state.exhaustedChannels[channel] = {
+        exhausted: true,
+        reason: text.slice(0, 240),
+        at: new Date().toISOString()
+      };
+      changed = true;
+    }
+  }
+  if (changed) {
+    state.modelCatalog = state.modelCatalog.map((item) => {
+      const exhausted = Boolean(state.exhaustedChannels[item.channel]?.exhausted);
+      return {
+        ...item,
+        exhausted,
+        disabled: exhausted || item.available === false
+      };
+    });
+    renderModelSelect();
+  }
+  refreshModels({ silent: true });
 }
 
 function syncFormToDom() {
@@ -362,28 +777,37 @@ function syncFormToDom() {
       Number(button.dataset.imageCount) === Number(state.form.imageCount)
     )
   );
-  $$('[data-ratio]').forEach((button) =>
-    button.classList.toggle("is-selected", button.dataset.ratio === state.form.ratio)
-  );
+  renderResourceSlots();
   $$('[data-style]').forEach((button) =>
     button.classList.toggle("is-selected", state.form.styles.includes(button.dataset.style))
   );
-  els.customSizeRow.hidden = state.form.ratio !== "custom";
+  if (els.customSizeRow) els.customSizeRow.hidden = true;
+  renderModelSelect();
   updateSizePreview();
   updateSummary();
   renderReferences();
 }
 
 function updateSizePreview() {
-  const size = buildSize(state.form.ratio, state.form.customWidth, state.form.customHeight);
-  els.sizePreview.textContent = size;
+  if (!els.sizePreview) return;
+  const slots = getSelectedSlots();
+  els.sizePreview.textContent = slots.map((slot) => `${slot.width}x${slot.height}`).join(", ");
 }
 
 function updateSummary() {
-  const styleCount = state.form.styles.length;
-  els.styleLimit.textContent = `已选 ${styleCount} / 3`;
-  els.uploadCount.textContent = `${state.form.referenceImages.length} / 4`;
-  els.submitSummary.textContent = `${brandLabel(state.form.brandAsset)} · ${state.form.ratio === "custom" ? "自定义" : state.form.ratio} · ${state.form.imageCount} 张`;
+  if (els.styleLimit) {
+    els.styleLimit.textContent = `已选 ${state.form.styles.length} / 3`;
+  }
+  if (els.uploadCount) {
+    els.uploadCount.textContent = `${state.form.referenceImages.length} / 4`;
+  }
+  const modelShort =
+    state.modelCatalog.find((item) => item.id === state.form.modelId)?.label?.split("·")[0]?.trim() ||
+    "模型";
+  const brandPreview = resolveBrandAssetFromPrompt(state.form.prompt, { previousBrandAsset: state.form.brandAsset || "none" });
+  const slots = getSelectedSlots();
+  const slotText = slots.length === 1 ? `${slots[0].width}×${slots[0].height}` : `${slots.length} 个资源位`;
+  els.submitSummary.textContent = `${brandLabel(brandPreview)} · ${modelShort} · ${slotText}`;
 }
 
 function setGeneratingUI(isGenerating) {
@@ -410,10 +834,21 @@ function renderReferences() {
 }
 
 function showStage(name) {
-  els.emptyStage.hidden = name !== "empty";
-  els.progressCard.hidden = name !== "progress";
-  els.errorCard.hidden = name !== "error";
-  els.resultSection.hidden = name !== "result";
+  const stage = document.getElementById("creation-result");
+  // Idle: hide the whole result panel (no empty placeholder).
+  if (name === "empty") {
+    if (stage) stage.hidden = true;
+    if (els.emptyStage) els.emptyStage.hidden = true;
+    if (els.progressCard) els.progressCard.hidden = true;
+    if (els.errorCard) els.errorCard.hidden = true;
+    if (els.resultSection) els.resultSection.hidden = true;
+    return;
+  }
+  if (stage) stage.hidden = false;
+  if (els.emptyStage) els.emptyStage.hidden = true;
+  if (els.progressCard) els.progressCard.hidden = name !== "progress";
+  if (els.errorCard) els.errorCard.hidden = name !== "error";
+  if (els.resultSection) els.resultSection.hidden = name !== "result";
 }
 
 function renderStageFromState() {
@@ -611,7 +1046,7 @@ function renderVersionStrip(session) {
 function normalizeImages(images = []) {
   return images.map((image, index) => ({
     id: image.id || uid(`image-${index + 1}`),
-    url: typeof image.url === "string" ? image.url : "",
+    url: typeof image.url === "string" ? normalizeAssetUrl(image.url) : "",
     status: image.status || "FINISH",
     prompt: image.prompt || "",
     model: image.model || "",
@@ -625,14 +1060,25 @@ function buildRequest({ prompt, sessionId = null, contextImageUrl = null, parent
     .filter((item) => item.status === "ready" && item.url)
     .map((item) => item.url);
   const isAdjustment = Boolean(sessionId);
+  const session = isAdjustment ? state.sessions.find((item) => item.id === sessionId) : null;
+  const brandAsset = resolveBrandAssetFromPrompt(prompt, {
+    isAdjustment,
+    previousBrandAsset: session?.brandAsset || state.form.brandAsset || "none"
+  });
+  if (referenceImages.length) preferReliableImg2ImgModel({ toast: false });
   return {
     prompt,
-    brandAsset: state.form.brandAsset,
+    brandAsset,
     generationType: isAdjustment ? "image-edit" : state.form.generationType,
     ratio: state.form.ratio,
-    size: buildSize(state.form.ratio, state.form.customWidth, state.form.customHeight),
-    styles: [...state.form.styles],
-    imageCount: Number(state.form.imageCount),
+    size: (() => {
+      const slots = getSelectedSlots();
+      return `${slots[0].width}x${slots[0].height}`;
+    })(),
+    resourceSlots: getSelectedSlots(),
+    styles: [],
+    imageCount: getSelectedSlots().length,
+    modelId: state.form.modelId || "modelscope-zimage",
     referenceImages,
     sessionId,
     ...(isAdjustment
@@ -677,6 +1123,7 @@ async function startGeneration({
   state.partialImages = [];
   state.pollErrors = 0;
   showStage("progress");
+  scrollToSection("create", { behavior: "smooth", focusResult: true });
   state.activeTask = {
     sessionId: sessionId || null,
     taskId: null,
@@ -974,6 +1421,9 @@ function failTask(kind, message) {
   showErrorState(kind, message);
   renderHistory();
   showToast(message, "error", 4800);
+  if (/neuron|quota|rate.?limit|used up|billing|credit|exhausted|余额不足|额度|402|429/i.test(String(message || ""))) {
+    maybeMarkExhaustedFromError(message);
+  }
 }
 
 async function cancelActiveTask() {
@@ -1085,19 +1535,23 @@ function toggleFavorite(imageId) {
   const session = getSession();
   const version = getCurrentVersion(session);
   if (!session || !version) return;
+  let nowFavorite = false;
   const updatedVersions = session.versions.map((item) => {
     if (item.version !== version.version) return item;
     return {
       ...item,
       images: item.images.map((image, index) => {
         const id = image.id || `${item.version}-${index}`;
-        return id === imageId ? { ...image, favorite: !image.favorite } : image;
+        if (id !== imageId) return image;
+        nowFavorite = !image.favorite;
+        return { ...image, favorite: nowFavorite };
       })
     };
   });
   updateSession(session.sessionId, (item) => ({ ...item, versions: updatedVersions, updatedAt: new Date().toISOString() }));
   renderResult();
   renderPortfolio();
+  showToast(nowFavorite ? "已加入收藏，可在作品集「已收藏」查看。" : "已取消收藏。", "success");
 }
 
 function openLightbox(imageId) {
@@ -1163,7 +1617,7 @@ function loadSession(sessionId, focusAdjustment = false) {
     brandAsset: version?.brandAsset || session.brandAsset || state.form.brandAsset,
     generationType: "text-to-image",
     ratio: version?.ratio || session.ratio || state.form.ratio,
-    imageCount: version?.imageCount || state.form.imageCount,
+    imageCount: 1,
     styles: [...(version?.styles || session.styles || state.form.styles)].slice(0, 3)
   };
   state.editingImageUrl = session.currentImageUrl || getUsableImages(version)[0]?.url || "";
@@ -1240,18 +1694,25 @@ function renderPortfolio() {
     }
   }
   works.sort((a, b) => new Date(b.version.createdAt) - new Date(a.version.createdAt));
-  const categories = ["全部", "节日大促", "新品上市", "日常运营", "品牌宣传", "其他"];
-  const folders = categories.slice(0, -1).map((category) => ({
-    category,
-    count: category === "全部" ? works.length : works.filter((work) => work.category === category).length
-  }));
+  const categories = ["全部", "已收藏", "节日大促", "新品上市", "日常运营", "品牌宣传", "其他"];
+  const countFor = (category) => {
+    if (category === "全部") return works.length;
+    if (category === "已收藏") return works.filter((work) => work.image.favorite).length;
+    return works.filter((work) => work.category === category).length;
+  };
+  const folders = categories
+    .filter((category) => category !== "其他")
+    .map((category) => ({
+      category,
+      count: countFor(category)
+    }));
   els.folderCount.textContent = `${folders.length} 个项目`;
   els.folderGrid.innerHTML = folders
     .map(
       (folder) => `
         <button class="folder-card" type="button" data-portfolio-category="${escapeHtml(folder.category)}">
           <span class="folder-icon">□</span>
-          <strong>${escapeHtml(folder.category === "全部" ? "全部作品" : folder.category)}</strong>
+          <strong>${escapeHtml(folder.category === "全部" ? "全部作品" : folder.category === "已收藏" ? "已收藏" : folder.category)}</strong>
           <span>${folder.count} 个作品</span>
         </button>
       `
@@ -1264,9 +1725,12 @@ function renderPortfolio() {
     )
     .join("");
 
-  const filtered = state.portfolioCategory === "全部"
-    ? works
-    : works.filter((work) => work.category === state.portfolioCategory);
+  const filtered =
+    state.portfolioCategory === "全部"
+      ? works
+      : state.portfolioCategory === "已收藏"
+        ? works.filter((work) => work.image.favorite)
+        : works.filter((work) => work.category === state.portfolioCategory);
   els.workCount.textContent = `${filtered.length} 个作品`;
   els.portfolioUpdated.textContent = `最后更新：${works[0] ? formatDate(works[0].version.createdAt, false) : "—"}`;
   els.portfolioGrid.innerHTML = filtered
@@ -1276,7 +1740,7 @@ function renderPortfolio() {
           <div class="portfolio-thumb"><img src="${escapeHtml(image.url)}" alt="${escapeHtml(session.title)}" loading="lazy" /></div>
           <div class="portfolio-body">
             <h3>${escapeHtml(session.title || "营销作品")}</h3>
-            <p>${escapeHtml(category)} · V${version.version} · ${escapeHtml(formatDate(version.createdAt, false))}</p>
+            <p>${image.favorite ? "已收藏 · " : ""}${escapeHtml(category)} · V${version.version} · ${escapeHtml(formatDate(version.createdAt, false))}</p>
             <div class="portfolio-actions">
               <button class="button button-secondary" type="button" data-portfolio-action="download" data-session-id="${escapeHtml(session.sessionId)}" data-version="${version.version}" data-image-id="${escapeHtml(image.id)}">下载</button>
               <button class="button button-secondary" type="button" data-portfolio-action="share" data-url="${escapeHtml(image.url)}">分享</button>
@@ -1362,12 +1826,7 @@ function openSessionDetail(sessionId) {
 }
 
 function renderExampleModal() {
-  const exampleItems = [
-    TEMPLATE_OPTIONS[0],
-    TEMPLATE_OPTIONS[3],
-    TEMPLATE_OPTIONS[6],
-    TEMPLATE_OPTIONS[4]
-  ];
+  const exampleItems = EXAMPLE_CATEGORIES;
   if (!exampleItems.some((item) => item.id === state.selectedExample)) {
     state.selectedExample = exampleItems[0].id;
   }
@@ -1379,15 +1838,13 @@ function renderExampleModal() {
   const selected = exampleItems.find((item) => item.id === state.selectedExample) || exampleItems[0];
   els.exampleContent.innerHTML = `
     <h3>✦ ${escapeHtml(selected.label)}</h3>
-    <p>结构化描述会帮助系统准确理解营销场景，并由后端统一注入品牌 IP。</p>
+    <p>${escapeHtml(selected.description || "")}</p>
     <div class="example-prompt-box"><strong>示例描述：</strong> ${escapeHtml(selected.prompt)}</div>
     <h3>描述技巧</h3>
     <ul class="example-tips">
-      <li>说明活动主题、营销场景和品牌 IP 的主要动作</li>
-      <li>指定背景元素、装饰风格和希望保留的文字区域</li>
-      <li>明确色彩倾向、构图比例、尺寸与投放渠道</li>
-      <li>写清活动名称、商品名称、优惠信息等不可遗漏内容</li>
+      ${(selected.tips || []).map((tip) => `<li>${escapeHtml(tip)}</li>`).join("")}
     </ul>
+    <p class="example-footer-note">如果需要调整主体姿势、背景细节、色彩倾向或构图比例，随时继续描述即可。</p>
     <div class="example-use-row"><button class="button button-primary" type="button" data-use-example="${escapeHtml(selected.id)}">使用该示例</button></div>
   `;
 }
@@ -1520,6 +1977,7 @@ async function handleFiles(fileList) {
         };
       }
       showToast(`${file.name} 上传完成。`, "success");
+      preferReliableImg2ImgModel({ toast: true });
     } catch (error) {
       const index = state.form.referenceImages.findIndex((item) => item.id === id);
       if (index >= 0) state.form.referenceImages[index].status = "error";
@@ -1543,10 +2001,31 @@ function removeReference(id) {
 }
 
 function bindEvents() {
+  if (els.modelSelect) {
+    els.modelSelect.addEventListener("change", () => {
+      const option = els.modelSelect.selectedOptions[0];
+      if (option?.disabled) {
+        renderModelSelect();
+        showToast("该模型所属通道额度已用尽，请换其他模型。", "error");
+        return;
+      }
+      state.form.modelId = els.modelSelect.value;
+      updateSummary();
+      persistDraft();
+    });
+  }
+
   document.addEventListener("click", async (event) => {
     const nav = event.target.closest("[data-nav]");
     if (nav) {
       setView(nav.dataset.nav);
+      return;
+    }
+
+    const defaultCaseBtn = event.target.closest("[data-default-case]");
+    if (defaultCaseBtn) {
+      const item = DEFAULT_CASES.find((entry) => entry.id === defaultCaseBtn.dataset.defaultCase);
+      applyDefaultCase(item);
       return;
     }
 
@@ -1586,6 +2065,18 @@ function bindEvents() {
       state.form.imageCount = Number(count.dataset.imageCount);
       syncFormToDom();
       persistDraft();
+      return;
+    }
+
+    const toggleSlot = event.target.closest("[data-toggle-slot]");
+    if (toggleSlot) {
+      toggleResourceSlot(toggleSlot.dataset.toggleSlot);
+      return;
+    }
+
+    const removeSlot = event.target.closest("[data-remove-slot]");
+    if (removeSlot) {
+      removeResourceSlot(removeSlot.dataset.removeSlot);
       return;
     }
 
@@ -1719,14 +2210,23 @@ function bindEvents() {
 
     const useExample = event.target.closest("[data-use-example]");
     if (useExample) {
-      const item = TEMPLATE_OPTIONS.find((entry) => entry.id === useExample.dataset.useExample);
+      const item =
+        EXAMPLE_CATEGORIES.find((entry) => entry.id === useExample.dataset.useExample) ||
+        TEMPLATE_OPTIONS.find((entry) => entry.id === useExample.dataset.useExample);
       if (item) {
         state.form.prompt = item.prompt;
+        if (els.prompt) {
+          els.prompt.value = item.prompt;
+          els.promptCount.textContent = `${item.prompt.length} / 3000`;
+          els.promptError.textContent = "";
+        }
         syncFormToDom();
+        updateSummary();
         persistDraft();
         closeModal(els.exampleModal);
         setView("create");
-        els.prompt.focus();
+        els.prompt?.focus();
+        showToast(`已填入「${item.label}」示例描述。`, "success");
       }
       return;
     }
@@ -1821,9 +2321,10 @@ function bindEvents() {
   els.cancelTask.addEventListener("click", cancelActiveTask);
   els.retryTask.addEventListener("click", retryLastTask);
   els.errorHistory.addEventListener("click", () => setView("history"));
-  els.newCreation.addEventListener("click", resetCreation);
-  els.historyEntry.addEventListener("click", () => setView("history"));
+  els.newCreation?.addEventListener("click", resetCreation);
+  els.historyEntry?.addEventListener("click", () => setView("history"));
   els.openExamples.addEventListener("click", () => openModal(els.exampleModal));
+  els.addCustomSlot?.addEventListener("click", () => addCustomResourceSlot());
 
   els.historySearch.addEventListener("input", () => {
     state.historySearch = els.historySearch.value;
@@ -1877,12 +2378,20 @@ function restoreActiveTask() {
 }
 
 function init() {
+  state.sessions = store.ensureDemoSessions(buildDemoSessions());
   setApiBadge();
   renderStaticControls();
   syncFormToDom();
   bindEvents();
   renderHistory();
   renderPortfolio();
+  refreshModels({ silent: true });
+  setupSectionSpy();
+  // Long-page mode: all sections stay mounted
+  els.views.forEach((section) => {
+    section.hidden = false;
+  });
+  setNavActive("create");
   if (state.activeTask) restoreActiveTask();
   else showStage("empty");
 }

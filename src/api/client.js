@@ -92,6 +92,31 @@ export const api = {
     });
   },
 
+  async listModels() {
+    if (config.apiMode === "mock") {
+      return {
+        defaultModelId: "modelscope-zimage",
+        models: [
+          {
+            id: "modelscope-zimage",
+            label: "魔搭 · Z-Image-Turbo（调试快）",
+            channel: "modelscope",
+            available: true,
+            exhausted: false,
+            disabled: false
+          }
+        ],
+        exhausted: {}
+      };
+    }
+    return fetchWithTimeout(endpoint("/functions/models"), { method: "GET" });
+  },
+
+  async clearExhausted(channel = null) {
+    if (config.apiMode === "mock") return { ok: true, exhausted: {} };
+    return postJson("/functions/clear-exhausted", channel ? { channel } : {});
+  },
+
   friendlyError(error) {
     return normalizeErrorMessage(error);
   }

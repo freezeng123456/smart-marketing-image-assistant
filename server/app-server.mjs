@@ -6,10 +6,13 @@ import { createCloudflareProvider } from "./cloudflare-provider.mjs";
 import { createPollinationsProvider, createFailoverProvider } from "./pollinations-provider.mjs";
 import { createSiliconFlowProvider } from "./siliconflow-provider.mjs";
 import { createModelScopeProvider } from "./modelscope-provider.mjs";
-import { createHuggingFaceProvider } from "./huggingface-provider.mjs";
+import { MODEL_CATALOG, DEFAULT_MODEL_ID, DEFAULT_IMG2IMG_MODEL_ID, findModel, isQuotaError, listUiModels } from "./model-catalog.mjs";
+import { createExhaustedStore } from "./exhausted-store.mjs";
+import { createRouterProvider } from "./router-provider.mjs";
 import { mimeFromFileName } from "./image-utils.mjs";
 import { createImageSourceLoader } from "./source-loader.mjs";
 import { createTaskService } from "./task-service.mjs";
+import { resolveBrandAsset } from "./brand-policy.mjs";
 
 const MIME = {
   ".html": "text/html; charset=utf-8",
@@ -29,7 +32,7 @@ const MAX_JSON_BYTES = 256 * 1024;
 const MAX_UPLOAD_BYTES = 10 * 1024 * 1024;
 const ALLOWED_UPLOAD_TYPES = new Set(["image/png", "image/jpeg", "image/webp"]);
 const PUBLIC_ROOT_FILES = new Set(["index.html", "styles.css", "config.js"]);
-const PUBLIC_DIRECTORIES = ["src/", "mock/"];
+const PUBLIC_DIRECTORIES = ["src/", "mock/", "assets/"];
 
 function publicStaticRequest(pathname) {
   const requested = pathname === "/" ? "index.html" : pathname.replace(/^\/+/, "");
@@ -80,7 +83,10 @@ function publicOrigin(request, fallbackPort) {
   const forwardedHost = String(request.headers["x-forwarded-host"] || "").split(",")[0].trim();
   const host = forwardedHost || request.headers.host || `localhost:${fallbackPort}`;
   const forwardedProto = String(request.headers["x-forwarded-proto"] || "").split(",")[0].trim();
-  const proto = forwardedProto || (/^(localhost|127\.0\.0\.1|\[::1\])(?::|$)/.test(host) ? "http" : "https");
+  // This server speaks plain HTTP. Only honor an explicit forwarded proto from a real TLS proxy.
+  // Do NOT assume https for public hosts — tunnels like bore.pub are often http-only, and
+  // https:// links then break image <img> loads in the browser.
+  const proto = forwardedProto === "https" || forwardedProto === "http" ? forwardedProto : "http";
   return `${proto}://${host}`;
 }
 
@@ -131,21 +137,44 @@ async function parseUpload(request, origin) {
   };
 }
 
+function normalizeResourceSlots(raw, fallbackSize = "1080x1920") {
+  const list = Array.isArray(raw) ? raw : [];
+  const slots = [];
+  for (const item of list.slice(0, 4)) {
+    const width = Math.round(Number(item?.width) || 0);
+    const height = Math.round(Number(item?.height) || 0);
+    if (width < 200 || height < 200 || width > 4096 || height > 4096) continue;
+    slots.push({
+      id: String(item?.id || `custom-${width}x${height}`),
+      label: String(item?.label || "自定义"),
+      width,
+      height
+    });
+  }
+  if (slots.length) return slots;
+  const [w, h] = String(fallbackSize || "1080x1920").split("x").map((n) => Number.parseInt(n, 10));
+  const width = Number.isFinite(w) ? w : 1080;
+  const height = Number.isFinite(h) ? h : 1920;
+  return [{ id: "default", label: "默认尺寸", width, height }];
+}
+
 function validateSubmit(body) {
   if (!String(body?.prompt || "").trim()) {
     throw Object.assign(new Error("请先描述你想生成的营销素材。"), { status: 400 });
   }
-  const count = Number(body.imageCount || 1);
-  if (![1, 2, 4].includes(count)) {
-    throw Object.assign(new Error("imageCount must be 1, 2 or 4."), { status: 400 });
-  }
-  return {
+  const modelId = findModel(body.modelId)?.id || DEFAULT_MODEL_ID;
+  const resourceSlots = normalizeResourceSlots(body.resourceSlots, body.size);
+  const draft = {
     ...body,
     prompt: String(body.prompt),
-    imageCount: count,
+    resourceSlots,
+    size: `${resourceSlots[0].width}x${resourceSlots[0].height}`,
+    imageCount: resourceSlots.length,
+    modelId,
     referenceImages: Array.isArray(body.referenceImages) ? body.referenceImages.slice(0, 4) : [],
     styles: Array.isArray(body.styles) ? body.styles.slice(0, 3) : []
   };
+  return { ...draft, brandAsset: resolveBrandAsset(draft) };
 }
 
 export async function createMarketingServer({
@@ -165,48 +194,94 @@ export async function createMarketingServer({
   ]);
 
   const loadImageSource = createImageSourceLoader({ projectRoot, runtimeDir });
+  const exhaustedStore = createExhaustedStore(runtimeDir);
   let activeProvider = provider;
   let providerError = null;
-  function buildFallbackChain(logger) {
-    const providers = [];
-    if (process.env.SILICONFLOW_API_KEY) {
-      try { providers.push(createSiliconFlowProvider({ loadImageSource, logger })); } catch (e) { logger.warn?.(`[provider] siliconflow skipped: ${e.message}`); }
-    }
+  let providersByChannel = {};
+
+  // Preferred free-tier order: ModelScope → SiliconFlow → Cloudflare → Pollinations
+  function buildOrderedProviders(logger) {
+    const ordered = [];
+    const byChannel = {};
     if (process.env.MODELSCOPE_API_TOKEN || process.env.MODELSCOPE_API_KEY) {
-      try { providers.push(createModelScopeProvider({ logger })); } catch (e) { logger.warn?.(`[provider] modelscope skipped: ${e.message}`); }
+      try {
+        const p = createModelScopeProvider({ loadImageSource, logger });
+        byChannel.modelscope = p;
+        ordered.push(p);
+      } catch (e) { logger.warn?.(`[provider] modelscope skipped: ${e.message}`); }
     }
-    if (process.env.HF_TOKEN || process.env.HUGGINGFACE_API_KEY) {
-      try { providers.push(createHuggingFaceProvider({ logger })); } catch (e) { logger.warn?.(`[provider] huggingface skipped: ${e.message}`); }
+    if (process.env.SILICONFLOW_API_KEY) {
+      try {
+        const p = createSiliconFlowProvider({ loadImageSource, logger });
+        byChannel.siliconflow = p;
+        ordered.push(p);
+      } catch (e) { logger.warn?.(`[provider] siliconflow skipped: ${e.message}`); }
     }
-    try { providers.push(createPollinationsProvider({ logger })); } catch (e) { logger.warn?.(`[provider] pollinations skipped: ${e.message}`); }
-    if (!providers.length) return null;
-    return providers.reduceRight((fallback, primary) =>
-      fallback ? createFailoverProvider({ primary, fallback, logger }) : primary
+    if (process.env.CLOUDFLARE_ACCOUNT_ID && process.env.CLOUDFLARE_API_TOKEN) {
+      try {
+        const p = createCloudflareProvider({ loadImageSource, logger });
+        byChannel.cloudflare = p;
+        ordered.push(p);
+      } catch (e) { logger.warn?.(`[provider] cloudflare skipped: ${e.message}`); }
+    }
+    if (process.env.DISABLE_POLLINATIONS_FALLBACK !== "1") {
+      try {
+        const p = createPollinationsProvider({ logger });
+        byChannel.pollinations = p;
+        ordered.push(p);
+      } catch (e) { logger.warn?.(`[provider] pollinations skipped: ${e.message}`); }
+    }
+    return { ordered, byChannel };
+  }
+
+  function channelKey(provider) {
+    const name = String(provider?.name || "");
+    if (name.includes("modelscope")) return "modelscope";
+    if (name.includes("siliconflow")) return "siliconflow";
+    if (name.includes("cloudflare")) return "cloudflare";
+    if (name.includes("pollinations")) return "pollinations";
+    return name || null;
+  }
+
+  function chainProviders(list, logger) {
+    if (!list.length) return null;
+    return list.reduceRight((fallback, primary) =>
+      fallback
+        ? createFailoverProvider({
+            primary,
+            fallback,
+            logger,
+            onQuotaError: async (error) => {
+              const key = channelKey(primary);
+              if (key) await exhaustedStore.mark(key, error?.message || "");
+            }
+          })
+        : primary
     );
   }
 
-  if (!activeProvider && process.env.CLOUDFLARE_ACCOUNT_ID && process.env.CLOUDFLARE_API_TOKEN) {
-    try {
-      const cloudflare = createCloudflareProvider({ loadImageSource, logger });
-      const fallback = buildFallbackChain(logger);
-      activeProvider = !fallback || process.env.DISABLE_POLLINATIONS_FALLBACK === "1"
-        ? cloudflare
-        : createFailoverProvider({ primary: cloudflare, fallback, logger });
-    } catch (error) {
-      providerError = error;
-    }
-  }
   if (!activeProvider) {
     try {
-      activeProvider = buildFallbackChain(logger);
+      const built = buildOrderedProviders(logger);
+      providersByChannel = built.byChannel;
+      const chain = chainProviders(built.ordered, logger);
+      activeProvider = chain
+        ? createRouterProvider({
+            providersByChannel: built.byChannel,
+            defaultChain: chain,
+            exhaustedStore,
+            logger
+          })
+        : null;
     } catch (error) {
-      providerError = providerError || error;
+      providerError = error;
     }
   }
   const taskService = activeProvider
     ? createTaskService({ provider: activeProvider, runtimeDir, logger })
     : null;
   await taskService?.init();
+
 
   const server = http.createServer(async (request, response) => {
     const method = request.method || "GET";
@@ -216,11 +291,50 @@ export async function createMarketingServer({
 
     try {
       if (method === "GET" && pathname === "/functions/health") {
+        const snap = await exhaustedStore.snapshot();
         writeJson(response, activeProvider ? 200 : 503, {
           ok: Boolean(activeProvider),
           provider: activeProvider?.name || null,
-          error: providerError?.message || (!activeProvider ? "Cloudflare credentials are not configured on the server." : null)
+          channels: Object.keys(providersByChannel),
+          exhausted: snap.channels,
+          defaultModelId: DEFAULT_MODEL_ID,
+          error: providerError?.message || (!activeProvider ? "Image providers are not configured on the server." : null)
         });
+        return;
+      }
+
+      if (method === "GET" && pathname === "/functions/models") {
+        const snap = await exhaustedStore.snapshot();
+        const available = new Set(Object.keys(providersByChannel));
+        writeJson(response, 200, {
+          defaultModelId: DEFAULT_MODEL_ID,
+          defaultImg2ImgModelId: DEFAULT_IMG2IMG_MODEL_ID,
+          models: listUiModels().map((item) => {
+            const exhausted = Boolean(snap.channels[item.channel]?.exhausted);
+            return {
+              id: item.id,
+              label: item.label,
+              channel: item.channel,
+              model: item.model,
+              tier: item.tier,
+              img2img: item.img2img,
+              reliableImg2Img: Boolean(item.reliableImg2Img),
+              available: available.has(item.channel),
+              exhausted,
+              disabled: exhausted || !available.has(item.channel),
+              exhaustedReason: snap.channels[item.channel]?.reason || null
+            };
+          }),
+          exhausted: snap.channels,
+          updatedAt: snap.updatedAt
+        });
+        return;
+      }
+
+      if (method === "POST" && pathname === "/functions/clear-exhausted") {
+        const body = await readJson(request).catch(() => ({}));
+        const snap = await exhaustedStore.clear(body?.channel || null);
+        writeJson(response, 200, { ok: true, exhausted: snap.channels });
         return;
       }
 
@@ -256,7 +370,7 @@ export async function createMarketingServer({
           const storedName = `${id}${ext}`;
           await writeFile(join(uploadsDir, storedName), upload.buffer);
           writeJson(response, 201, {
-            url: new URL(`/uploads/${storedName}`, origin).href,
+            url: `/uploads/${storedName}`,
             fileName: upload.fileName,
             size: upload.size
           });
