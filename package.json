@@ -14,6 +14,6 @@
     "share": "bash scripts/share-trycloudflare.sh"
   },
   "engines": {
-    "node": ">=20"
+    "node": "20.x"
   }
 }
