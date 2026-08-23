@@ -1,31 +1,8 @@
 /** Free-tier image models exposed in the web UI. */
 export const MODEL_CATALOG = [
 {
-    id: "modelscope-zimage",
-    label: "魔搭 · Z-Image-Turbo（推荐/快）",
-    channel: "modelscope",
-    provider: "modelscope",
-    model: "Tongyi-MAI/Z-Image-Turbo",
-    tier: "debug",
-    img2img: true,
-    // ModelScope inference often ignores `image` for this model → text-only lookalike.
-    reliableImg2Img: false
-  },
-
-{
-    id: "modelscope-qwen-image",
-    label: "魔搭 · Qwen-Image（偏质量）",
-    channel: "modelscope",
-    provider: "modelscope",
-    model: "Qwen/Qwen-Image",
-    tier: "best",
-    img2img: true,
-    reliableImg2Img: false
-  },
-
-{
     id: "modelscope-qwen-edit",
-    label: "魔搭 · Qwen-Image-Edit（图生图）",
+    label: "魔搭 · Qwen-Image-Edit（推荐/图生图）",
     channel: "modelscope",
     provider: "modelscope",
     model: "Qwen/Qwen-Image-Edit",
@@ -57,7 +34,7 @@ export const MODEL_CATALOG = [
   }
 ];
 
-export const DEFAULT_MODEL_ID = "modelscope-zimage"; // prefer speed
+export const DEFAULT_MODEL_ID = "modelscope-qwen-edit";
 export const DEFAULT_IMG2IMG_MODEL_ID = "modelscope-qwen-edit";
 
 export function modelsForChannel(channel) {
@@ -77,7 +54,7 @@ export function isQuotaError(error) {
 }
 
 export function listUiModels() {
-  return MODEL_CATALOG.filter((item) => item.img2img);
+  return MODEL_CATALOG.filter((item) => item.img2img && item.reliableImg2Img);
 }
 
 export function findModel(id) {

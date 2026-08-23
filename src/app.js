@@ -165,8 +165,8 @@ const state = {
   exhaustedChannels: {}
 };
 
-// Prefer fast default: migrate drafts still on slower Qwen-Image
-if (state.form.modelId === "modelscope-qwen-image") {
+// Migrate drafts off removed non-img2img models
+if (state.form.modelId === "modelscope-zimage" || state.form.modelId === "modelscope-qwen-image") {
   state.form.modelId = DEFAULT_FORM.modelId;
 }
 
@@ -669,7 +669,7 @@ function renderModelSelect() {
     ? state.modelCatalog
     : [
         {
-          id: state.form.modelId || "modelscope-zimage",
+          id: state.form.modelId || "modelscope-qwen-edit",
           label: "魔搭 · Z-Image-Turbo（调试快）",
           channel: "modelscope",
           disabled: false,
@@ -1090,7 +1090,7 @@ function buildRequest({ prompt, sessionId = null, contextImageUrl = null, parent
     resourceSlots: getSelectedSlots(),
     styles: [],
     imageCount: getSelectedSlots().length,
-    modelId: state.form.modelId || "modelscope-zimage",
+    modelId: state.form.modelId || "modelscope-qwen-edit",
     referenceImages,
     sessionId,
     ...(isAdjustment
