@@ -1,0 +1,20 @@
+services:
+  - type: web
+    name: smart-marketing-image-assistant
+    runtime: node
+    plan: free
+    region: oregon
+    buildCommand: npm install --omit=dev
+    startCommand: npm start
+    healthCheckPath: /functions/health
+    envVars:
+      - key: NODE_VERSION
+        value: "20"
+      - key: MODELSCOPE_API_TOKEN
+        sync: false
+      - key: SILICONFLOW_API_KEY
+        sync: false
+      - key: CLOUDFLARE_ACCOUNT_ID
+        sync: false
+      - key: CLOUDFLARE_API_TOKEN
+        sync: false
