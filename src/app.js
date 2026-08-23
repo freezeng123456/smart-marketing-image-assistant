@@ -411,14 +411,7 @@ function applyDefaultCase(item, { toast = true } = {}) {
   }
   state.form.modelId = item.modelId || state.form.modelId;
   state.form.brandAsset = item.brandAsset || resolveBrandAssetFromPrompt(item.prompt);
-  state.form.referenceImages = (item.referenceImages || []).map((ref) => ({
-    id: ref.id || uid("reference"),
-    fileName: ref.fileName || "reference.png",
-    url: ref.url,
-    previewUrl: ref.previewUrl || ref.url,
-    status: "ready",
-    size: ref.size || 0
-  }));
+  state.form.referenceImages = normalizeFormReferences(item.referenceImages || []);
   if (els.prompt) {
     els.prompt.value = item.prompt;
     els.promptCount.textContent = `${item.prompt.length} / 3000`;
@@ -472,6 +465,109 @@ function getSelectedSlots() {
   if (slots.length) return slots;
   return [{ id: "splash", label: "开屏广告", width: 1080, height: 1920 }];
 }
+
+
+function normalizeFormReferences(urlsOrObjects = []) {
+  const list = Array.isArray(urlsOrObjects) ? urlsOrObjects : [];
+  return list
+    .map((item, index) => {
+      if (!item) return null;
+      if (typeof item === "string") {
+        const url = normalizeAssetUrl(item);
+        if (!url) return null;
+        const fileName = url.split("/").pop()?.split("?")[0] || `reference-${index + 1}.png`;
+        return {
+          id: uid("reference"),
+          fileName,
+          url,
+          previewUrl: url,
+          status: "ready",
+          size: 0
+        };
+      }
+      const url = normalizeAssetUrl(item.url || item.previewUrl || "");
+      if (!url) return null;
+      return {
+        id: item.id || uid("reference"),
+        fileName: item.fileName || url.split("/").pop()?.split("?")[0] || `reference-${index + 1}.png`,
+        url,
+        previewUrl: normalizeAssetUrl(item.previewUrl || item.url) || url,
+        status: "ready",
+        size: item.size || 0
+      };
+    })
+    .filter(Boolean)
+    .slice(0, 4);
+}
+
+function slotsFromSizeString(size) {
+  const match = String(size || "").match(/(\d+)\s*[x×]\s*(\d+)/i);
+  if (!match) return [];
+  const width = Number(match[1]);
+  const height = Number(match[2]);
+  if (!(width >= 200 && height >= 200 && width <= 4096 && height <= 4096)) return [];
+  return [{ id: `restored-${width}x${height}`, label: "历史尺寸", width, height }];
+}
+
+function restoreFormFromSession(session, version) {
+  if (!session) return;
+  const lastRequest = session.lastRequest || {};
+  const refSources =
+    (Array.isArray(version?.referenceImages) && version.referenceImages.length
+      ? version.referenceImages
+      : null) ||
+    (Array.isArray(lastRequest.referenceImages) ? lastRequest.referenceImages : []) ||
+    [];
+  const slotSources =
+    (Array.isArray(version?.resourceSlots) && version.resourceSlots.length
+      ? version.resourceSlots
+      : null) ||
+    (Array.isArray(lastRequest.resourceSlots) && lastRequest.resourceSlots.length
+      ? lastRequest.resourceSlots
+      : null) ||
+    null;
+  let selectedSlots = slotSources ? normalizeSlots(slotSources).slice(0, 1) : [];
+  if (!selectedSlots.length) {
+    selectedSlots = slotsFromSizeString(version?.size || lastRequest.size);
+  }
+  const modelId = version?.modelId || lastRequest.modelId || state.form.modelId;
+  const firstUserPrompt = session.messages?.find((message) => message.role === "user")?.content || "";
+  state.form = {
+    ...state.form,
+    prompt: firstUserPrompt || version?.prompt || lastRequest.prompt || state.form.prompt,
+    brandAsset: version?.brandAsset || session.brandAsset || state.form.brandAsset,
+    generationType: "text-to-image",
+    ratio: version?.ratio || session.ratio || state.form.ratio,
+    imageCount: 1,
+    styles: [...(version?.styles || session.styles || state.form.styles)].slice(0, 3),
+    referenceImages: normalizeFormReferences(refSources),
+    modelId: modelId || state.form.modelId,
+    ...(selectedSlots.length ? { selectedSlots } : {})
+  };
+}
+
+function resolveRequestReferenceUrls({ sessionId = null } = {}) {
+  const fromForm = state.form.referenceImages
+    .filter((item) => item.status === "ready" && item.url)
+    .map((item) => normalizeAssetUrl(item.url))
+    .filter(Boolean);
+  if (fromForm.length) return fromForm.slice(0, 4);
+
+  const session = sessionId ? getSession(sessionId) : getSession();
+  if (!session) return [];
+  const version = getCurrentVersion(session);
+  const sources =
+    (Array.isArray(version?.referenceImages) && version.referenceImages.length
+      ? version.referenceImages
+      : null) ||
+    session.lastRequest?.referenceImages ||
+    [];
+  return normalizeFormReferences(sources)
+    .map((item) => item.url)
+    .filter(Boolean)
+    .slice(0, 4);
+}
+
 
 function renderResourceSlots() {
   const selected = getSelectedSlots();
@@ -1110,9 +1206,7 @@ function normalizeImages(images = []) {
 }
 
 function buildRequest({ prompt, sessionId = null, contextImageUrl = null, parentVersion = 0 }) {
-  const referenceImages = state.form.referenceImages
-    .filter((item) => item.status === "ready" && item.url)
-    .map((item) => item.url);
+  const referenceImages = resolveRequestReferenceUrls({ sessionId });
   const isAdjustment = Boolean(sessionId);
   const session = isAdjustment ? state.sessions.find((item) => item.id === sessionId) : null;
   const brandAsset = resolveBrandAssetFromPrompt(prompt, {
@@ -1416,7 +1510,11 @@ function completeTask(response) {
     size: task.request.size,
     styles: task.request.styles,
     imageCount: task.request.imageCount,
-    referenceImages: task.request.referenceImages,
+    modelId: task.request.modelId,
+    resourceSlots: task.request.resourceSlots || [],
+    referenceImages: Array.isArray(task.request.referenceImages)
+      ? task.request.referenceImages.map((item) => (typeof item === "string" ? item : item?.url)).filter(Boolean)
+      : [],
     contextImageUrl: task.contextImageUrl || "",
     parentVersion: Number(task.parentVersion || 0),
     taskId: task.taskId,
@@ -1653,9 +1751,13 @@ function restoreVersion(sessionId, versionNumber, continueEditing = false) {
     updatedAt: new Date().toISOString()
   }));
   state.currentSessionId = sessionId;
+  // Re-read session after update so lastRequest / versions stay consistent.
+  restoreFormFromSession(getSession(sessionId) || session, version);
   state.editingImageUrl = image?.url || "";
   closeModal(els.detailModal);
   setView("create");
+  syncFormToDom();
+  persistDraft();
   renderResult();
   if (continueEditing) {
     els.adjustmentInput.focus();
@@ -1669,16 +1771,7 @@ function loadSession(sessionId, focusAdjustment = false) {
   if (!session) return;
   state.currentSessionId = sessionId;
   const version = getCurrentVersion(session);
-  const firstUserPrompt = session.messages?.find((message) => message.role === "user")?.content || "";
-  state.form = {
-    ...state.form,
-    prompt: firstUserPrompt || state.form.prompt,
-    brandAsset: version?.brandAsset || session.brandAsset || state.form.brandAsset,
-    generationType: "text-to-image",
-    ratio: version?.ratio || session.ratio || state.form.ratio,
-    imageCount: 1,
-    styles: [...(version?.styles || session.styles || state.form.styles)].slice(0, 3)
-  };
+  restoreFormFromSession(session, version);
   state.editingImageUrl = session.currentImageUrl || getUsableImages(version)[0]?.url || "";
   syncFormToDom();
   persistDraft();
@@ -1942,6 +2035,11 @@ function resetCreation() {
 async function retryLastTask() {
   const session = getSession();
   const request = session?.lastRequest;
+  if (session) {
+    restoreFormFromSession(session, getCurrentVersion(session));
+    syncFormToDom();
+    persistDraft();
+  }
   if (session?.versions?.length && request?.prompt) {
     await startGeneration({
       prompt: request.prompt,

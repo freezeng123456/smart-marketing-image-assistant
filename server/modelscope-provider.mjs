@@ -64,6 +64,10 @@ export function createModelScopeProvider({
 
     const needsImg2Img = requireImg2Img && (shouldUseBrandKangaroo(request) || (Array.isArray(request.referenceImages) && request.referenceImages.length));
     if (needsImg2Img && !image) {
+      const hadUserRefs = Array.isArray(request.referenceImages) && request.referenceImages.length > 0;
+      if (hadUserRefs && Number(refs.userCount || 0) === 0) {
+        throw new Error("历史参考图文件已失效，请重新上传");
+      }
       throw new Error(
         "图生图需要参考图，但参考图未能加载（请重新上传，或检查演示资源路径）。"
       );

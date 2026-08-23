@@ -50,8 +50,22 @@ export function createImageSourceLoader({ projectRoot, runtimeDir, fetchImpl = g
   const uploadsDir = join(runtimeDir, "uploads");
 
   async function readChecked(path, mime = mimeFromFileName(path)) {
-    const info = await stat(path);
-    if (!info.isFile() || info.size > MAX_IMAGE_BYTES) throw new Error("Reference image is missing or exceeds 10MB.");
+    let info;
+    try {
+      info = await stat(path);
+    } catch {
+      const normalized = normalize(String(path || ""));
+      if (normalized === normalize(uploadsDir) || normalized.startsWith(normalize(uploadsDir) + "/") ) {
+        throw new Error("历史参考图文件已失效，请重新上传");
+      }
+      if (normalized === normalize(generatedDir) || normalized.startsWith(normalize(generatedDir) + "/")) {
+        throw new Error("历史生成图文件已失效，请重新生成或重新上传参考图");
+      }
+      throw new Error("参考图文件不存在或无法读取");
+    }
+    if (!info.isFile() || info.size > MAX_IMAGE_BYTES) {
+      throw new Error("参考图不存在或超过 10MB 限制");
+    }
     const buffer = await readFile(path);
     return { buffer, mime: /^image\//.test(mime) ? mime : inferImageMime(buffer) };
   }
