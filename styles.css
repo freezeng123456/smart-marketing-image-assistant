@@ -1301,17 +1301,36 @@ input::placeholder {
 
 .partial-results {
   display: grid;
-  grid-template-columns: repeat(4, minmax(0, 1fr));
-  gap: 10px;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px;
   margin-top: 22px;
+}
+
+.partial-results.count-1 {
+  grid-template-columns: minmax(0, 420px);
+  justify-content: start;
+}
+
+.partial-results.count-3,
+.partial-results.count-4 {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
 }
 
 .partial-card {
   position: relative;
   overflow: hidden;
   aspect-ratio: 3 / 4;
-  border: 1px solid var(--border);
-  border-radius: 12px;
+  border: 1px dashed rgba(180, 196, 184, 0.28);
+  border-radius: 14px;
+  background:
+    linear-gradient(160deg, rgba(54, 72, 58, 0.55), rgba(24, 30, 26, 0.92)),
+    #1a211c;
+  min-height: 180px;
+}
+
+.partial-card.is-ready {
+  border-style: solid;
+  border-color: var(--border);
   background: #121513;
 }
 
@@ -1319,21 +1338,61 @@ input::placeholder {
   width: 100%;
   height: 100%;
   object-fit: cover;
+  display: block;
+  background: #1a211c;
+}
+
+.partial-card.skeleton {
+  display: grid;
+  place-items: center;
+}
+
+.skeleton-body {
+  position: relative;
+  z-index: 1;
+  display: grid;
+  justify-items: center;
+  gap: 8px;
+  padding: 16px;
+  text-align: center;
+  color: #d7e3d8;
+}
+
+.skeleton-body strong {
+  font-size: 14px;
+  font-weight: 700;
+  letter-spacing: 0.02em;
+}
+
+.skeleton-body > span:last-child {
+  font-size: 12px;
+  color: rgba(215, 227, 216, 0.72);
+}
+
+.skeleton-pulse {
+  width: 42px;
+  height: 42px;
+  border-radius: 12px;
+  border: 2px solid rgba(122, 184, 140, 0.35);
+  background:
+    radial-gradient(circle at 35% 30%, rgba(170, 230, 180, 0.35), transparent 55%),
+    rgba(70, 110, 80, 0.28);
+  box-shadow: 0 0 0 6px rgba(122, 184, 140, 0.08);
+  animation: placeholder-pulse 1.6s ease-in-out infinite;
 }
 
 .skeleton {
   position: relative;
   overflow: hidden;
-  background: #242925;
 }
 
 .skeleton::after {
   content: "";
   position: absolute;
   inset: 0;
-  background: linear-gradient(100deg, transparent, rgba(255, 255, 255, 0.07), transparent);
-  transform: translateX(-100%);
-  animation: shimmer 1.4s infinite;
+  background: linear-gradient(105deg, transparent 20%, rgba(255, 255, 255, 0.08) 48%, transparent 76%);
+  transform: translateX(-120%);
+  animation: shimmer 1.6s infinite;
 }
 
 .progress-actions {
@@ -2350,6 +2409,11 @@ input::placeholder {
   }
 }
 
+@keyframes placeholder-pulse {
+  0%, 100% { transform: scale(1); opacity: 0.75; }
+  50% { transform: scale(1.06); opacity: 1; }
+}
+
 @keyframes shimmer {
   to {
     transform: translateX(100%);
@@ -2655,6 +2719,10 @@ input::placeholder {
 
   .partial-results {
     grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .partial-results.count-1 {
+    grid-template-columns: minmax(0, 1fr);
   }
 
   .image-actions {

@@ -907,22 +907,61 @@ function renderProgress() {
   setGeneratingUI(true);
 }
 
+function getExpectedResultSlots() {
+  const task = state.activeTask;
+  const slots = Array.isArray(task?.request?.resourceSlots)
+    ? task.request.resourceSlots.filter((slot) => slot && Number(slot.width) > 0 && Number(slot.height) > 0)
+    : [];
+  if (slots.length) return slots.slice(0, 4);
+  const count = Math.max(1, Math.min(4, Number(task?.request?.imageCount) || getSelectedSlots().length || 1));
+  const fallback = getSelectedSlots().slice(0, count);
+  if (fallback.length) return fallback;
+  return Array.from({ length: count }, (_, index) => ({
+    id: `slot-${index + 1}`,
+    label: `资源位 ${index + 1}`,
+    width: 1080,
+    height: 1440
+  }));
+}
+
 function renderPartialImages() {
   const images = state.partialImages || [];
-  if (!images.length) {
+  const slots = getExpectedResultSlots();
+  const count = Math.max(slots.length, images.length, state.activeTask ? 1 : 0);
+  if (!count) {
     els.partialResults.hidden = true;
     els.partialResults.innerHTML = "";
+    els.partialResults.className = "partial-results";
     return;
   }
+
   els.partialResults.hidden = false;
-  els.partialResults.innerHTML = images
-    .map((image) => {
-      if (image.status === "FINISH" && image.url && isSafeImageUrl(image.url)) {
-        return `<div class="partial-card"><img src="${escapeHtml(image.url)}" alt="生成中的阶段性结果" /></div>`;
-      }
-      return '<div class="partial-card skeleton" aria-label="图片生成中"></div>';
-    })
-    .join("");
+  els.partialResults.className = `partial-results count-${Math.min(4, count)}`;
+  const cards = [];
+  for (let index = 0; index < count; index += 1) {
+    const image = images[index];
+    const slot = slots[index] || slots[0] || { width: 1080, height: 1440, label: `资源位 ${index + 1}` };
+    const ratio = `${Number(slot.width) || 3} / ${Number(slot.height) || 4}`;
+    const label = escapeHtml(slot.label || image?.slotLabel || `资源位 ${index + 1}`);
+    if (image?.status === "FINISH" && image.url && isSafeImageUrl(image.url)) {
+      cards.push(
+        `<div class="partial-card is-ready" style="aspect-ratio:${ratio}">` +
+          `<img src="${escapeHtml(image.url)}" alt="${label} 生成结果" />` +
+        `</div>`
+      );
+      continue;
+    }
+    cards.push(
+      `<div class="partial-card skeleton" style="aspect-ratio:${ratio}" aria-label="${label} 生成中">` +
+        `<div class="skeleton-body">` +
+          `<span class="skeleton-pulse" aria-hidden="true"></span>` +
+          `<strong>图片生成中</strong>` +
+          `<span>${label}</span>` +
+        `</div>` +
+      `</div>`
+    );
+  }
+  els.partialResults.innerHTML = cards.join("");
 }
 
 function showErrorState(kind, message) {
