@@ -36,7 +36,7 @@ export const DEFAULT_CASES = [
     selectedSlots: [{ id: "splash", label: "开屏广告", width: 1080, height: 1920 }],
     modelId: "modelscope-qwen-edit",
     brandAsset: "brand-kangaroo",
-    resultUrl: "/assets/demo/meituan-kangaroo-result.png?v=2",
+    resultUrl: "/assets/demo/meituan-kangaroo-result.png?v=3",
     referenceImages: []
   }
 ];
