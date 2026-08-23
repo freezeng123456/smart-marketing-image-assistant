@@ -25,7 +25,7 @@ function publicTask(task) {
   return serializable;
 }
 
-export function createTaskService({ provider, runtimeDir, logger = console, taskTimeoutMs = 180_000 }) {
+export function createTaskService({ provider, runtimeDir, logger = console, taskTimeoutMs = 240_000 }) {
   if (!provider?.generate) throw new Error("A real image provider is required.");
   const tasks = new Map();
   const taskFile = join(runtimeDir, "tasks.json");

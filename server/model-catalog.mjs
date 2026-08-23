@@ -1,18 +1,8 @@
 /** Free-tier image models exposed in the web UI. */
 export const MODEL_CATALOG = [
-  {
-    id: "modelscope-qwen-edit",
-    label: "魔搭 · Qwen-Image-Edit（推荐/图生图）",
-    channel: "modelscope",
-    provider: "modelscope",
-    model: "Qwen/Qwen-Image-Edit",
-    tier: "best",
-    img2img: true,
-    reliableImg2Img: true
-  },
-  {
+{
     id: "modelscope-zimage",
-    label: "魔搭 · Z-Image-Turbo（调试快/偏文生图）",
+    label: "魔搭 · Z-Image-Turbo（推荐/快）",
     channel: "modelscope",
     provider: "modelscope",
     model: "Tongyi-MAI/Z-Image-Turbo",
@@ -21,9 +11,10 @@ export const MODEL_CATALOG = [
     // ModelScope inference often ignores `image` for this model → text-only lookalike.
     reliableImg2Img: false
   },
-  {
+
+{
     id: "modelscope-qwen-image",
-    label: "魔搭 · Qwen-Image",
+    label: "魔搭 · Qwen-Image（偏质量）",
     channel: "modelscope",
     provider: "modelscope",
     model: "Qwen/Qwen-Image",
@@ -31,7 +22,19 @@ export const MODEL_CATALOG = [
     img2img: true,
     reliableImg2Img: false
   },
-  {
+
+{
+    id: "modelscope-qwen-edit",
+    label: "魔搭 · Qwen-Image-Edit（图生图）",
+    channel: "modelscope",
+    provider: "modelscope",
+    model: "Qwen/Qwen-Image-Edit",
+    tier: "best",
+    img2img: true,
+    reliableImg2Img: true
+  },
+
+{
     id: "siliconflow-kolors",
     label: "硅基 · Kolors（免费/调试）",
     channel: "siliconflow",
@@ -41,7 +44,8 @@ export const MODEL_CATALOG = [
     img2img: true,
     reliableImg2Img: true
   },
-  {
+
+{
     id: "cloudflare-flux2-dev",
     label: "Cloudflare · FLUX.2-dev",
     channel: "cloudflare",
@@ -53,7 +57,7 @@ export const MODEL_CATALOG = [
   }
 ];
 
-export const DEFAULT_MODEL_ID = "modelscope-qwen-image";
+export const DEFAULT_MODEL_ID = "modelscope-zimage"; // prefer speed
 export const DEFAULT_IMG2IMG_MODEL_ID = "modelscope-qwen-edit";
 
 export function modelsForChannel(channel) {
