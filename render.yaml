@@ -4,7 +4,7 @@ services:
     runtime: node
     plan: free
     region: oregon
-    buildCommand: npm install --omit=dev
+    buildCommand: npm install --omit=dev && python3 -m pip install --target ./python-vendor -r requirements.txt
     startCommand: npm start
     healthCheckPath: /functions/health
     envVars:
