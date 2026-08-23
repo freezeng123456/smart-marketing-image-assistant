@@ -1,4 +1,5 @@
 import { shouldUseBrandKangaroo, BRAND_KANGAROO_CONSTRAINT } from "./brand-policy.mjs";
+import { aspectPromptConstraint, resolveAspectRatio, sizeForAspectRatio } from "./aspect-ratio.mjs";
 import { normalizeModelSize } from "./cloudflare-provider.mjs";
 
 const DEFAULT_BASE = "https://image.pollinations.ai/prompt";
@@ -8,11 +9,12 @@ function buildPrompt(request) {
   const styles = Array.isArray(request.styles) && request.styles.length ? request.styles.join(", ") : "commercial marketing";
   const original = String(request.prompt || "").trim();
   const brand = shouldUseBrandKangaroo(request) ? BRAND_KANGAROO_CONSTRAINT : "";
+  const aspect = aspectPromptConstraint(resolveAspectRatio(request));
   return [
     `Brief: ${original}`,
     brand,
-    `Styles: ${styles}. Ratio ${request.ratio || "9:16"}, size ${request.size || "1080x1920"}.`,
-    "Full-bleed commercial marketing poster; clear subject."
+    aspect,
+    `Styles: ${styles}. Full-bleed commercial marketing poster; clear subject.`
   ]
     .filter(Boolean)
     .join("\n")
@@ -56,7 +58,9 @@ export function createPollinationsProvider({
   async function generateOnce(request, index = 0, { signal } = {}) {
     const activeModel = request.modelOverride || model;
     const prompt = buildPrompt(request);
-    const { width, height } = normalizeModelSize(request.size, outputMaxDimension);
+    const picked = sizeForAspectRatio(resolveAspectRatio(request), outputMaxDimension);
+    const width = picked.width;
+    const height = picked.height;
     const seed = (Date.now() + index * 7919) % 2147483647;
 
     if (useOpenAICompat) {

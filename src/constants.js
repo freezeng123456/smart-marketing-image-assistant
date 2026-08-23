@@ -208,7 +208,7 @@ export const GENERATION_TYPES = [
   { value: "image-edit", label: "图片编辑" }
 ];
 
-/** Common marketing / app placement sizes (multi-select). */
+/** Common marketing placements — width/height define aspect ratio only. */
 export const RESOURCE_SLOT_OPTIONS = [
   { id: "splash", label: "开屏广告", width: 1080, height: 1920, tip: "启动全屏" },
   { id: "home-popup", label: "首页弹窗", width: 800, height: 600, tip: "活动弹窗" },

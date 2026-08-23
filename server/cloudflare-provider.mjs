@@ -2,6 +2,7 @@ import { readFile } from "node:fs/promises";
 import { fileURLToPath } from "node:url";
 import { inferImageMime, resizeForReference } from "./image-utils.mjs";
 import { shouldUseBrandKangaroo, BRAND_KANGAROO_CONSTRAINT_SHORT } from "./brand-policy.mjs";
+import { aspectPromptConstraint, resolveAspectRatio, sizeForAspectRatio } from "./aspect-ratio.mjs";
 
 const DEFAULT_API_BASE = "https://api.cloudflare.com/client/v4";
 const DEFAULT_TEXT_MODEL = "@cf/black-forest-labs/flux-2-dev";
@@ -98,7 +99,8 @@ function structuredPrompt(request, { hasCurrent = false, hasBrandIp = false, bra
       imageMap.length ? `References: ${imageMap.join("; ")}.` : "",
       `Adjustment: ${original}`,
       subjectGuidance,
-      `Styles: ${styles}. Ratio ${request.ratio || "9:16"}, size ${request.size || "1080x1920"}.`,
+      aspectPromptConstraint(resolveAspectRatio(request)),
+    `Styles: ${styles}.`,
       "Keep campaign theme and unaffected details; full-bleed commercial poster."
     ].filter(Boolean).join("\n").slice(0, 4000);
   }
@@ -107,7 +109,8 @@ function structuredPrompt(request, { hasCurrent = false, hasBrandIp = false, bra
     `Brief: ${original}`,
     imageMap.length ? `References: ${imageMap.join("; ")}.` : "",
     subjectGuidance,
-    `Styles: ${styles}. Ratio ${request.ratio || "9:16"}, size ${request.size || "1080x1920"}.`,
+    aspectPromptConstraint(resolveAspectRatio(request)),
+    `Styles: ${styles}.`,
     "Full-bleed commercial marketing poster; clear subject; space for title if needed."
   ].filter(Boolean).join("\n").slice(0, 4000);
 }
@@ -297,6 +300,8 @@ export function createCloudflareProvider({
   }
 
   async function generate(request, index = 0, { signal } = {}) {
+    const aspectPicked = sizeForAspectRatio(resolveAspectRatio(request), outputMaxDimension);
+    request = { ...request, ratio: aspectPicked.ratio, size: aspectPicked.size };
     const isAdjustment = Boolean(request.sessionId || request.generationType === "image-edit");
     const primaryModel = request.modelOverride || (isAdjustment ? editModel : textModel);
     const allowInternalFallback = !request.modelOverride;

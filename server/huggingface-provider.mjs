@@ -1,9 +1,11 @@
 import { shouldUseBrandKangaroo, BRAND_KANGAROO_CONSTRAINT } from "./brand-policy.mjs";
+import { aspectPromptConstraint, resolveAspectRatio } from "./aspect-ratio.mjs";
 function buildPrompt(request) {
   const styles = Array.isArray(request.styles) && request.styles.length ? request.styles.join(", ") : "commercial marketing";
   const original = String(request.prompt || "").trim();
   const brand = shouldUseBrandKangaroo(request) ? BRAND_KANGAROO_CONSTRAINT : "";
-  return [`Brief: ${original}`, brand, `Styles: ${styles}. Full-bleed commercial poster.`].filter(Boolean).join("\n");
+  const aspect = aspectPromptConstraint(resolveAspectRatio(request));
+  return [`Brief: ${original}`, brand, aspect, `Styles: ${styles}. Full-bleed commercial poster.`].filter(Boolean).join("\n");
 }
 
 export function createHuggingFaceProvider({

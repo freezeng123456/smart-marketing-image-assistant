@@ -248,6 +248,37 @@ function ratioLabel(value) {
   return RATIO_OPTIONS.find((item) => item.value === value)?.label || value || "—";
 }
 
+
+function gcdInt(a, b) {
+  let x = Math.abs(Math.round(a));
+  let y = Math.abs(Math.round(b));
+  while (y) {
+    const t = y;
+    y = x % y;
+    x = t;
+  }
+  return x || 1;
+}
+
+/** Reduce WxH to "W:H" for aspect constraints (1080x1920 → 9:16). */
+function simplifyRatio(width, height) {
+  const w = Math.max(1, Math.round(Number(width) || 1));
+  const h = Math.max(1, Math.round(Number(height) || 1));
+  const g = gcdInt(w, h);
+  return `${w / g}:${h / g}`;
+}
+
+function slotAspectRatio(slot) {
+  if (!slot) return "9:16";
+  return simplifyRatio(slot.width, slot.height);
+}
+
+function formatSlotSummary(slot) {
+  if (!slot) return "—";
+  return `${slot.label} · ${slotAspectRatio(slot)}`;
+}
+
+
 function statusClass(status) {
   const normalized = String(status || "").toUpperCase();
   if (["DONE", "FINISH"].includes(normalized)) return "status-done";
@@ -456,14 +487,14 @@ function renderResourceSlots() {
     els.slotSummaryCount.textContent = `当前资源位`;
   }
   if (els.slotSummaryList) {
-    els.slotSummaryList.textContent = selected.map((slot) => `${slot.label} (${slot.width}×${slot.height})`).join("、");
+    els.slotSummaryList.textContent = selected.map((slot) => formatSlotSummary(slot)).join("、");
   }
   if (els.slotTags) {
     els.slotTags.innerHTML = selected
       .map(
         (slot) => `
         <span class="slot-tag">
-          ${escapeHtml(slot.label)} ${slot.width}×${slot.height}
+          ${escapeHtml(slot.label)} · ${escapeHtml(slotAspectRatio(slot))}
           <button type="button" data-remove-slot="${escapeHtml(slotKey(slot))}" aria-label="移除">✕</button>
         </span>`
       )
@@ -472,23 +503,24 @@ function renderResourceSlots() {
   if (els.slotOptions) {
     els.slotOptions.innerHTML = RESOURCE_SLOT_OPTIONS.map((item) => {
       const active = selected.some((slot) => slot.id === item.id && slot.width === item.width && slot.height === item.height);
+      const aspect = simplifyRatio(item.width, item.height);
       return `
         <button class="slot-option ${active ? "is-selected" : ""}" type="button" data-toggle-slot="${escapeHtml(item.id)}">
           <span class="slot-option-main">
             <strong>${escapeHtml(item.label)}</strong>
-            <span>${item.width}×${item.height}${item.tip ? ` · ${escapeHtml(item.tip)}` : ""}</span>
+            <span>${aspect}${item.tip ? ` · ${escapeHtml(item.tip)}` : ""}</span>
           </span>
           <span class="slot-option-check">${active ? "✓" : ""}</span>
         </button>`;
     }).join("");
   }
-  // Keep legacy size preview in sync with first slot
+  // Ratio is the constraint; WxH only seeds the aspect.
   const first = selected[0];
   if (first) {
-    state.form.ratio = "custom";
+    state.form.ratio = slotAspectRatio(first);
     state.form.customWidth = first.width;
     state.form.customHeight = first.height;
-    if (els.sizePreview) els.sizePreview.textContent = `${first.width}x${first.height}`;
+    if (els.sizePreview) els.sizePreview.textContent = state.form.ratio;
   }
 }
 
@@ -536,7 +568,7 @@ function addCustomResourceSlot() {
   renderResourceSlots();
   updateSummary();
   persistDraft();
-  showToast(`已切换为自定义 ${width}×${height}。`, "success");
+  showToast(`已切换为自定义比例 ${simplifyRatio(width, height)}。`, "success");
 }
 
 function renderStaticControls() {
@@ -787,7 +819,7 @@ function syncFormToDom() {
 function updateSizePreview() {
   if (!els.sizePreview) return;
   const slots = getSelectedSlots();
-  els.sizePreview.textContent = slots.map((slot) => `${slot.width}x${slot.height}`).join(", ");
+  els.sizePreview.textContent = slots.map((slot) => slotAspectRatio(slot)).join(", ");
 }
 
 function updateSummary() {
@@ -802,7 +834,7 @@ function updateSummary() {
     "模型";
   const brandPreview = resolveBrandAssetFromPrompt(state.form.prompt, { previousBrandAsset: state.form.brandAsset || "none" });
   const slots = getSelectedSlots();
-  const slotText = slots.length === 1 ? `${slots[0].width}×${slots[0].height}` : `${slots.length} 个资源位`;
+  const slotText = slots.length ? formatSlotSummary(slots[0]) : "默认 9:16";
   els.submitSummary.textContent = `${brandLabel(brandPreview)} · ${modelShort} · ${slotText}`;
 }
 
@@ -1105,8 +1137,12 @@ function buildRequest({ prompt, sessionId = null, contextImageUrl = null, parent
     prompt,
     brandAsset,
     generationType: isAdjustment ? "image-edit" : state.form.generationType,
-    ratio: state.form.ratio,
+    ratio: (() => {
+      const slots = getSelectedSlots();
+      return slotAspectRatio(slots[0]);
+    })(),
     size: (() => {
+      // Kept as a backend size hint derived from the slot; models constrain by ratio.
       const slots = getSelectedSlots();
       return `${slots[0].width}x${slots[0].height}`;
     })(),

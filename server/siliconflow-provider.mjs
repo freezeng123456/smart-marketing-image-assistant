@@ -1,6 +1,7 @@
 import { shouldUseBrandKangaroo, BRAND_KANGAROO_CONSTRAINT } from "./brand-policy.mjs";
 import { inferImageMime } from "./image-utils.mjs";
 import { resolveBrandAndUserRefs, sceneRefPromptHint } from "./ref-compose.mjs";
+import { aspectPromptConstraint, resolveAspectRatio } from "./aspect-ratio.mjs";
 
 function buildPrompt(request, { hasRef = false, userCount = 0, collage = false } = {}) {
   const styles = Array.isArray(request.styles) && request.styles.length ? request.styles.join(", ") : "commercial marketing";
@@ -11,7 +12,8 @@ function buildPrompt(request, { hasRef = false, userCount = 0, collage = false }
   const followRef = userCount && !hasBrand
     ? "Input image is the primary visual reference: keep its main subject, products, brand colors, icons, and composition cues."
     : "";
-  return [`Brief: ${original}`, brand, scene, followRef, `Styles: ${styles}. Full-bleed commercial poster.`].filter(Boolean).join("\n");
+  const aspect = aspectPromptConstraint(resolveAspectRatio(request));
+  return [`Brief: ${original}`, brand, scene, followRef, aspect, `Styles: ${styles}. Full-bleed commercial poster.`].filter(Boolean).join("\n");
 }
 
 const SILICONFLOW_ALLOWED_SIZES = [
@@ -24,6 +26,14 @@ const SILICONFLOW_ALLOWED_SIZES = [
 ];
 
 /** Map any WxH request to the SiliconFlow size with the closest aspect ratio. */
+function sizeForAspectFallback(request) {
+  const ratio = resolveAspectRatio(request);
+  const [aw, ah] = ratio.split(":").map(Number);
+  // Hint size near 1024 long-edge for SiliconFlow mapping.
+  if (aw >= ah) return `${1024}x${Math.max(512, Math.round((1024 * ah) / aw))}`;
+  return `${Math.max(512, Math.round((1024 * aw) / ah))}x1024`;
+}
+
 export function pickSize(size) {
   const raw = String(size || "768x1024").trim();
   if (SILICONFLOW_ALLOWED_SIZES.includes(raw)) return raw;
@@ -70,7 +80,7 @@ export function createSiliconFlowProvider({
       userCount: refs.userCount,
       collage
     });
-    const image_size = pickSize(request.size);
+    const image_size = pickSize(request.size || sizeForAspectFallback(request));
     logger.info?.(
       `[SiliconFlow] generating ${image_size} via ${activeModel} (${refs.mode}, userRefs=${refs.userCount})`
     );

@@ -1,6 +1,7 @@
 import { mkdir, readFile, writeFile } from "node:fs/promises";
 import { join } from "node:path";
 import { imageFileName } from "./image-utils.mjs";
+import { resolveAspectRatio, simplifyRatio } from "./aspect-ratio.mjs";
 
 function uid(prefix) {
   return `${prefix}-${crypto.randomUUID()}`;
@@ -121,11 +122,14 @@ export function createTaskService({ provider, runtimeDir, logger = console, task
 
       const runSlot = async ({ index, slot, slotSize, slotLabel }) => {
           if (task.aborted) throw new DOMException("Aborted", "AbortError");
+          const slotRatio = slot?.width && slot?.height
+            ? simplifyRatio(slot.width, slot.height)
+            : resolveAspectRatio(task.request);
           const result = await provider.generate(
             {
               ...task.request,
               size: slotSize,
-              ratio: task.request.ratio || "custom"
+              ratio: slotRatio
             },
             index,
             { signal: task.controller.signal }

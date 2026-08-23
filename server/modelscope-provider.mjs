@@ -1,6 +1,7 @@
 import { shouldUseBrandKangaroo, BRAND_KANGAROO_CONSTRAINT } from "./brand-policy.mjs";
 import { inferImageMime } from "./image-utils.mjs";
 import { resolveBrandAndUserRefs, sceneRefPromptHint } from "./ref-compose.mjs";
+import { aspectPromptConstraint, resolveAspectRatio, sizeForAspectRatio } from "./aspect-ratio.mjs";
 
 function buildPrompt(request, { userCount = 0, collage = false } = {}) {
   const styles = Array.isArray(request.styles) && request.styles.length ? request.styles.join(", ") : "commercial marketing";
@@ -9,12 +10,13 @@ function buildPrompt(request, { userCount = 0, collage = false } = {}) {
   const brand = hasBrand ? BRAND_KANGAROO_CONSTRAINT : "";
   const scene = sceneRefPromptHint(userCount, { collage, hasBrand });
   const followRef = userCount && !hasBrand
-    ? "Input image is the primary visual reference: keep its main subject, products, brand colors, icons, and composition cues. Adapt ratio/layout for the campaign brief, but do not invent an unrelated scene or character."
+    ? "Input image is the primary visual reference: keep its main subject, products, brand colors, icons, and composition cues. Adapt layout to the target aspect ratio, but do not invent an unrelated scene or character."
     : "";
   const bgFill = hasBrand
     ? "Background: bright warm orange-to-gold commercial marketing fill to all four corners (soft glow, festive light accents). Do NOT use dark night streets, deep crimson neon, black voids, or empty gray/white margins."
     : "Full-bleed commercial marketing poster; fill the entire frame with scene and color, no black empty margins.";
-  return [`Brief: ${original}`, brand, scene, followRef, bgFill, `Styles: ${styles}. Full-bleed commercial marketing poster, high quality.`]
+  const aspect = aspectPromptConstraint(resolveAspectRatio(request));
+  return [`Brief: ${original}`, brand, scene, followRef, aspect, bgFill, `Styles: ${styles}. Full-bleed commercial marketing poster, high quality.`]
     .filter(Boolean)
     .join("\n");
 }
@@ -67,15 +69,11 @@ export function createModelScopeProvider({
     const refs = await resolveBrandAndUserRefs(request, { loadImageSource, signal, logger });
     const collage = refs.mode.includes("collage");
     const prompt = buildPrompt(request, { userCount: refs.userCount, collage });
-    const size = String(request.size || "768x1024");
-    const [w, h] = size.split("x").map((n) => Number.parseInt(n, 10));
-    const clamped = clampModelGenSize(
-      Number.isFinite(w) ? w : 768,
-      Number.isFinite(h) ? h : 1024,
-      Number(process.env.MODELSCOPE_MAX_EDGE || 1280)
-    );
-    const width = clamped.width;
-    const height = clamped.height;
+    const aspect = resolveAspectRatio(request);
+    const maxEdge = Number(process.env.MODELSCOPE_MAX_EDGE || 1280);
+    const picked = sizeForAspectRatio(aspect, maxEdge);
+    const width = picked.width;
+    const height = picked.height;
 
     const image = refs.singleImageUri;
     const needsImg2Img = requireImg2Img && (shouldUseBrandKangaroo(request) || (Array.isArray(request.referenceImages) && request.referenceImages.length));

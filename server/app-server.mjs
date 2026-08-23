@@ -13,6 +13,7 @@ import { mimeFromFileName } from "./image-utils.mjs";
 import { createImageSourceLoader } from "./source-loader.mjs";
 import { createTaskService } from "./task-service.mjs";
 import { resolveBrandAsset } from "./brand-policy.mjs";
+import { resolveAspectRatio, simplifyRatio } from "./aspect-ratio.mjs";
 
 const MIME = {
   ".html": "text/html; charset=utf-8",
@@ -164,10 +165,12 @@ function validateSubmit(body) {
   }
   const modelId = findModel(body.modelId)?.id || DEFAULT_MODEL_ID;
   const resourceSlots = normalizeResourceSlots(body.resourceSlots, body.size);
+  const ratio = simplifyRatio(resourceSlots[0].width, resourceSlots[0].height);
   const draft = {
     ...body,
     prompt: String(body.prompt),
     resourceSlots,
+    ratio,
     size: `${resourceSlots[0].width}x${resourceSlots[0].height}`,
     imageCount: resourceSlots.length,
     modelId,
