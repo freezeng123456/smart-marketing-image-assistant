@@ -1,5 +1,4 @@
 import { shouldUseBrandKangaroo, BRAND_KANGAROO_CONSTRAINT } from "./brand-policy.mjs";
-import { withEnglishModelPrompt } from "./model-brief-en.mjs";
 import { normalizeModelSize } from "./cloudflare-provider.mjs";
 
 const DEFAULT_BASE = "https://image.pollinations.ai/prompt";
@@ -55,7 +54,6 @@ export function createPollinationsProvider({
   const useOpenAICompat = /\/v1\/images\/generations\/?$/.test(apiBase) || Boolean(apiKey);
 
   async function generateOnce(request, index = 0, { signal } = {}) {
-    request = await withEnglishModelPrompt(request, { fetchImpl, logger });
     const activeModel = request.modelOverride || model;
     const prompt = buildPrompt(request);
     const { width, height } = normalizeModelSize(request.size, outputMaxDimension);

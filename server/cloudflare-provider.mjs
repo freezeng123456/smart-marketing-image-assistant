@@ -2,7 +2,6 @@ import { readFile } from "node:fs/promises";
 import { fileURLToPath } from "node:url";
 import { inferImageMime, resizeForReference } from "./image-utils.mjs";
 import { shouldUseBrandKangaroo, BRAND_KANGAROO_CONSTRAINT_SHORT } from "./brand-policy.mjs";
-import { withEnglishModelPrompt } from "./model-brief-en.mjs";
 
 const DEFAULT_API_BASE = "https://api.cloudflare.com/client/v4";
 const DEFAULT_TEXT_MODEL = "@cf/black-forest-labs/flux-2-dev";
@@ -298,7 +297,6 @@ export function createCloudflareProvider({
   }
 
   async function generate(request, index = 0, { signal } = {}) {
-    request = await withEnglishModelPrompt(request, { fetchImpl, logger });
     const isAdjustment = Boolean(request.sessionId || request.generationType === "image-edit");
     const primaryModel = request.modelOverride || (isAdjustment ? editModel : textModel);
     const allowInternalFallback = !request.modelOverride;
