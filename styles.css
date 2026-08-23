@@ -3061,8 +3061,18 @@ html {
 
 
 .examples-menu-tag {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
   margin-left: 8px;
-  color: #ef4444;
+  padding: 2px 8px;
+  border-radius: 6px;
+  border: 0;
+  background: #ffe8e0;
+  color: #c23a2b;
   font-size: 12px;
-  font-weight: 700;
+  font-weight: 600;
+  line-height: 1.4;
+  letter-spacing: 0.02em;
+  vertical-align: middle;
 }
