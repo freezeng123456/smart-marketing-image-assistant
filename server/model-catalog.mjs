@@ -1,8 +1,19 @@
 /** Free-tier image models exposed in the web UI. */
 export const MODEL_CATALOG = [
 {
+    id: "bailian-qwen-edit-plus",
+    label: "百炼 · qwen-image-edit-plus（推荐/图生图）",
+    channel: "dashscope",
+    provider: "dashscope",
+    model: "qwen-image-edit-plus",
+    tier: "best",
+    img2img: true,
+    reliableImg2Img: true
+  },
+
+{
     id: "modelscope-qwen-edit",
-    label: "魔搭 · Qwen-Image-Edit（推荐/图生图）",
+    label: "魔搭 · Qwen-Image-Edit（图生图）",
     channel: "modelscope",
     provider: "modelscope",
     model: "Qwen/Qwen-Image-Edit",
@@ -34,8 +45,13 @@ export const MODEL_CATALOG = [
   }
 ];
 
-export const DEFAULT_MODEL_ID = "modelscope-qwen-edit";
-export const DEFAULT_IMG2IMG_MODEL_ID = "modelscope-qwen-edit";
+export const DEFAULT_MODEL_ID = "bailian-qwen-edit-plus";
+export const DEFAULT_IMG2IMG_MODEL_ID = "bailian-qwen-edit-plus";
+
+/** Legacy catalog id → current Bailian default (history / localStorage). */
+const MODEL_ID_ALIASES = {
+  "bailian-wanx-imageedit": "bailian-qwen-edit-plus"
+};
 
 export function modelsForChannel(channel) {
   return MODEL_CATALOG.filter((item) => item.channel === channel && item.img2img);
@@ -58,7 +74,8 @@ export function listUiModels() {
 }
 
 export function findModel(id) {
-  return listUiModels().find((item) => item.id === id) || null;
+  const resolved = MODEL_ID_ALIASES[id] || id;
+  return listUiModels().find((item) => item.id === resolved) || null;
 }
 
 export function needsReliableImg2Img(request = {}) {

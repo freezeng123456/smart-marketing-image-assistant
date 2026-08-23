@@ -49,7 +49,8 @@ export function createRouterProvider({
     } catch (error) {
       if (isQuotaError(error) && exhaustedStore) {
         const guessed =
-          /modelscope|魔搭/i.test(error.message) ? "modelscope"
+          /dashscope|bailian|百炼|wanx/i.test(error.message) ? "dashscope"
+          : /modelscope|魔搭/i.test(error.message) ? "modelscope"
           : /silicon|kolors/i.test(error.message) ? "siliconflow"
           : /cloudflare|neuron|workers ai/i.test(error.message) ? "cloudflare"
           : /pollinations/i.test(error.message) ? "pollinations"

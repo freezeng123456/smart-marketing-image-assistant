@@ -1,10 +1,15 @@
-import { execFile } from "node:child_process";
+import { execFile, spawnSync } from "node:child_process";
 import { mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { extname, join } from "node:path";
 import { promisify } from "node:util";
+import { pythonChildEnv } from "./python-env.mjs";
 
 const execFileAsync = promisify(execFile);
+
+export const WANX_EDIT_MIN_EDGE = 512;
+export const WANX_EDIT_MAX_EDGE = 4096;
+export const WANX_EDIT_MAX_BYTES = 10 * 1024 * 1024;
 
 export function inferImageMime(buffer, fallback = "image/jpeg") {
   if (!Buffer.isBuffer(buffer) || buffer.length < 12) return fallback;
@@ -116,5 +121,149 @@ export async function resizeForReference(buffer, { mime = inferImageMime(buffer)
     throw wrapped;
   } finally {
     await rm(directory, { recursive: true, force: true });
+  }
+}
+
+
+/**
+ * wanx2.1-imageedit requires each edge in [minEdge, maxEdge] and payload under maxBytes.
+ * Scale UP so min(w,h) >= minEdge (bilinear), then scale DOWN so max(w,h) <= maxEdge.
+ * Preserves aspect ratio. Uses vendored Pillow (no new Node deps). Output untouched by callers.
+ */
+export async function ensureWanxEditInputSize(
+  buffer,
+  {
+    minEdge = WANX_EDIT_MIN_EDGE,
+    maxEdge = WANX_EDIT_MAX_EDGE,
+    maxBytes = WANX_EDIT_MAX_BYTES,
+    mime = inferImageMime(buffer, "image/png")
+  } = {}
+) {
+  if (!Buffer.isBuffer(buffer) || !buffer.length) {
+    throw Object.assign(new Error("Empty image buffer for wanx input."), { status: 422 });
+  }
+
+  const dimensions = imageDimensions(buffer);
+  const minDim = dimensions ? Math.min(dimensions.width, dimensions.height) : 0;
+  const maxDim = dimensions ? Math.max(dimensions.width, dimensions.height) : 0;
+  const withinEdges =
+    dimensions && minDim >= minEdge && maxDim <= maxEdge && buffer.length <= maxBytes;
+  if (withinEdges) {
+    return {
+      buffer,
+      mime,
+      width: dimensions.width,
+      height: dimensions.height,
+      resized: false
+    };
+  }
+
+  const directory = await mkdtemp(join(tmpdir(), "wanx-input-"));
+  const inputExt = extensionForMime(mime);
+  const input = join(directory, `input.${inputExt}`);
+  const output = join(directory, "output.png");
+  const script = join(directory, "resize.py");
+  try {
+    await writeFile(input, buffer);
+    await writeFile(
+      script,
+      `from PIL import Image
+import sys
+inp, outp = sys.argv[1], sys.argv[2]
+min_edge = int(sys.argv[3])
+max_edge = int(sys.argv[4])
+max_bytes = int(sys.argv[5])
+im = Image.open(inp)
+im.load()
+if im.mode not in ("RGB", "RGBA"):
+    im = im.convert("RGBA")
+w, h = im.size
+scale = 1.0
+short = min(w, h)
+if short < min_edge:
+    scale = max(scale, min_edge / float(short))
+nw = max(1, int(round(w * scale)))
+nh = max(1, int(round(h * scale)))
+if max(nw, nh) > max_edge:
+    down = max_edge / float(max(nw, nh))
+    nw = max(1, int(round(nw * down)))
+    nh = max(1, int(round(nh * down)))
+# Clamp each edge into range while keeping ratio as best-effort (extreme ratios)
+nw = max(1, min(max_edge, nw))
+nh = max(1, min(max_edge, nh))
+if (nw, nh) != (w, h):
+    # Bilinear upscale / downscale; nearest would also be fine for hard edges
+    resample = Image.Resampling.BILINEAR if max(nw, nh) >= max(w, h) else Image.Resampling.LANCZOS
+    im = im.resize((nw, nh), resample)
+# Prefer PNG; if over maxBytes, fall back to JPEG
+if im.mode in ("RGBA", "LA"):
+    bg = Image.new("RGB", im.size, (255, 255, 255))
+    bg.paste(im, mask=im.split()[-1])
+    rgb = bg
+else:
+    rgb = im.convert("RGB")
+rgb.save(outp, "PNG", optimize=True)
+import os
+if os.path.getsize(outp) > max_bytes:
+    q = 90
+    while q >= 40:
+        rgb.save(outp, "JPEG", quality=q, optimize=True)
+        if os.path.getsize(outp) <= max_bytes:
+            break
+        q -= 10
+`
+    );
+    const result = spawnSync(
+      "python3",
+      [script, input, output, String(minEdge), String(maxEdge), String(maxBytes)],
+      { encoding: "utf8", env: pythonChildEnv(), timeout: 60000, maxBuffer: 20 * 1024 * 1024 }
+    );
+    if (result.status !== 0) {
+      throw new Error(result.stderr || result.stdout || "wanx input resize failed");
+    }
+    const outBuffer = await readFile(output);
+    const outMime = inferImageMime(outBuffer, "image/png");
+    const outDims = imageDimensions(outBuffer) || { width: 0, height: 0 };
+    if (outBuffer.length > maxBytes) {
+      throw Object.assign(
+        new Error(`参考图压缩后仍超过 ${Math.floor(maxBytes / (1024 * 1024))}MB，请换更小的图片。`),
+        { status: 422 }
+      );
+    }
+    if (outDims.width < minEdge || outDims.height < minEdge) {
+      throw Object.assign(
+        new Error(
+          `参考图缩放后仍小于 ${minEdge}px（${outDims.width}×${outDims.height}），请换更大的图片。`
+        ),
+        { status: 422 }
+      );
+    }
+    if (outDims.width > maxEdge || outDims.height > maxEdge) {
+      throw Object.assign(
+        new Error(
+          `参考图缩放后仍超过 ${maxEdge}px（${outDims.width}×${outDims.height}）。`
+        ),
+        { status: 422 }
+      );
+    }
+    return {
+      buffer: outBuffer,
+      mime: outMime,
+      width: outDims.width,
+      height: outDims.height,
+      resized: true
+    };
+  } catch (error) {
+    if (error.status) throw error;
+    const wrapped = new Error(
+      dimensions
+        ? `参考图尺寸 ${dimensions.width}×${dimensions.height} 不符合 wanx 要求（边长 ${minEdge}–${maxEdge}px），且服务端无法缩放：${error.message}`
+        : `参考图不符合 wanx 尺寸要求，且服务端无法缩放：${error.message}`,
+      { cause: error }
+    );
+    wrapped.status = 422;
+    throw wrapped;
+  } finally {
+    await rm(directory, { recursive: true, force: true }).catch(() => {});
   }
 }
