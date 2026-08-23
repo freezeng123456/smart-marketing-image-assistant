@@ -27,6 +27,24 @@ export function toDataUri(buffer, mimeHint = "") {
   return `data:${mime};base64,${buffer.toString("base64")}`;
 }
 
+
+/** Place brand kangaroo on a bright warm marketing plate so img2img does not inherit white/black voids. */
+export async function plateBrandOnWarmBackdrop(brandBuffer, { size = 1024 } = {}) {
+  const dir = await mkdtemp(join(tmpdir(), "brand-plate-"));
+  try {
+    const brandPath = join(dir, "brand.png");
+    const outPath = join(dir, "out.png");
+    await writeFile(brandPath, brandBuffer);
+    const scriptPath = fileURLToPath(new URL("./brand-plate.py", import.meta.url));
+    const result = spawnSync("python3", [scriptPath, brandPath, outPath, String(size)], { encoding: "utf8" });
+    if (result.status !== 0) throw new Error(result.stderr || result.stdout || "brand plate failed");
+    const buffer = await readFile(outPath);
+    return { buffer, mime: "image/png" };
+  } finally {
+    await rm(dir, { recursive: true, force: true }).catch(() => {});
+  }
+}
+
 /** Side-by-side collage: brand IP left, scene/product refs right. Single-image APIs can still "see" both. */
 export async function composeBrandAndSceneCollage(brandBuffer, sceneBuffers, { maxEdge = 1024 } = {}) {
   const dir = await mkdtemp(join(tmpdir(), "ref-compose-"));
@@ -67,7 +85,10 @@ y = 0
 for s in scenes:
     canvas.paste(s, (brand.width + 8, y), s)
     y += s.height + 8
-canvas.convert("RGB").save(out, "PNG", optimize=True)
+# Flatten any remaining alpha onto white
+flat = Image.new("RGBA", canvas.size, (255, 255, 255, 255))
+flat = Image.alpha_composite(flat, canvas)
+flat.convert("RGB").save(out, "PNG", optimize=True)
 `;
     const py = join(dir, "compose.py");
     await writeFile(py, script);
@@ -111,6 +132,16 @@ export async function resolveBrandAndUserRefs(request, { loadImageSource, signal
 
   let singleImageUri = brandUri || userUris[0] || null;
   let mode = brandUri ? (userUris.length ? "brand+user-collage" : "brand-only") : userUris.length ? "user-only" : "none";
+
+  if (brand && !userLoaded.length) {
+    try {
+      const plated = await plateBrandOnWarmBackdrop(brand.buffer, { size: 1024 });
+      singleImageUri = toDataUri(plated.buffer, plated.mime);
+      mode = "brand-warm-plate";
+    } catch (error) {
+      logger?.warn?.(`[refs] brand warm plate failed: ${error.message}`);
+    }
+  }
 
   if (brand && userLoaded.length) {
     try {

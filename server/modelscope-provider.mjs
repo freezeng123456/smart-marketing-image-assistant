@@ -11,9 +11,28 @@ function buildPrompt(request, { userCount = 0, collage = false } = {}) {
   const followRef = userCount && !hasBrand
     ? "Input image is the primary visual reference: keep its main subject, products, brand colors, icons, and composition cues. Adapt ratio/layout for the campaign brief, but do not invent an unrelated scene or character."
     : "";
-  return [`Brief: ${original}`, brand, scene, followRef, `Styles: ${styles}. Full-bleed commercial marketing poster, high quality.`]
+  const bgFill = hasBrand
+    ? "Background: bright warm orange-to-gold commercial marketing fill to all four corners (soft glow, festive light accents). Do NOT use dark night streets, deep crimson neon, black voids, or empty gray/white margins."
+    : "Full-bleed commercial marketing poster; fill the entire frame with scene and color, no black empty margins.";
+  return [`Brief: ${original}`, brand, scene, followRef, bgFill, `Styles: ${styles}. Full-bleed commercial marketing poster, high quality.`]
     .filter(Boolean)
     .join("\n");
+}
+
+
+/** Qwen-Image-Edit often yields black/void backgrounds at 1080×1920; keep gen size modest then fitToExactSize. */
+function clampModelGenSize(width, height, maxEdge = 1280) {
+  const w = Math.max(64, Number(width) || 768);
+  const h = Math.max(64, Number(height) || 1024);
+  const long = Math.max(w, h);
+  if (long <= maxEdge) {
+    return { width: Math.round(w / 8) * 8, height: Math.round(h / 8) * 8 };
+  }
+  const scale = maxEdge / long;
+  return {
+    width: Math.max(64, Math.round((w * scale) / 8) * 8),
+    height: Math.max(64, Math.round((h * scale) / 8) * 8)
+  };
 }
 
 function sleep(ms, signal) {
@@ -50,8 +69,13 @@ export function createModelScopeProvider({
     const prompt = buildPrompt(request, { userCount: refs.userCount, collage });
     const size = String(request.size || "768x1024");
     const [w, h] = size.split("x").map((n) => Number.parseInt(n, 10));
-    const width = Number.isFinite(w) ? w : 768;
-    const height = Number.isFinite(h) ? h : 1024;
+    const clamped = clampModelGenSize(
+      Number.isFinite(w) ? w : 768,
+      Number.isFinite(h) ? h : 1024,
+      Number(process.env.MODELSCOPE_MAX_EDGE || 1280)
+    );
+    const width = clamped.width;
+    const height = clamped.height;
 
     const image = refs.singleImageUri;
     const needsImg2Img = requireImg2Img && (shouldUseBrandKangaroo(request) || (Array.isArray(request.referenceImages) && request.referenceImages.length));

@@ -154,6 +154,9 @@ from PIL import Image
 import sys
 inp, out, tw, th = sys.argv[1], sys.argv[2], int(sys.argv[3]), int(sys.argv[4])
 im = Image.open(inp).convert("RGBA")
+# Flatten alpha onto white so transparent pixels never become black RGB void
+bg = Image.new("RGBA", im.size, (255, 255, 255, 255))
+im = Image.alpha_composite(bg, im)
 sw, sh = im.size
 if sw <= 0 or sh <= 0:
     raise SystemExit("invalid source size")
