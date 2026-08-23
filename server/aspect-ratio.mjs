@@ -62,12 +62,13 @@ export function aspectPromptConstraint(ratio) {
   const [aw, ah] = value.split(":").map(Number);
   const orientation =
     aw === ah ? "square" : aw > ah ? "landscape" : "portrait";
-  // Outpaint / expand framing (no crop): keep source intact, only synthesize new margins.
+  // Style-consistent reframe: new layout for the target ratio; content may adapt; no letterbox.
   return [
-    `Outpaint / expand the image to aspect ratio ${value} (${orientation}).`,
-    "Keep the original subject, products, logos, and all existing content fully intact — do NOT crop, zoom-in, stretch, or cut off any part of the source.",
-    "Only generate new matching background / scene continuation in the empty padded margins to fill the new canvas.",
-    "Extend lighting, colors, and style seamlessly from the original edges; no letterbox bars left in the final image."
+    `Reframe this marketing creative for aspect ratio ${value} (${orientation}).`,
+    "Keep the same visual style, color palette, lighting, materials, and brand look as the reference.",
+    "You MAY rearrange layout, rescale elements, and adapt or regenerate scene content so the poster feels intentionally designed for this ratio.",
+    "Fill the entire frame edge-to-edge as a finished full-bleed poster.",
+    "Do NOT leave letterbox/pillarbox bars, gray/white empty margins, or stretched warped content."
   ].join(" ");
 }
 

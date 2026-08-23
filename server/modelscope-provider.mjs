@@ -1,5 +1,5 @@
 import { shouldUseBrandKangaroo, BRAND_KANGAROO_CONSTRAINT } from "./brand-policy.mjs";
-import { inferImageMime, padBufferToAspectRatio } from "./image-utils.mjs";
+import { inferImageMime } from "./image-utils.mjs";
 import { resolveBrandAndUserRefs, sceneRefPromptHint } from "./ref-compose.mjs";
 import { aspectPromptConstraint, resolveAspectRatio, sizeForAspectRatio } from "./aspect-ratio.mjs";
 
@@ -10,7 +10,7 @@ function buildPrompt(request, { userCount = 0, collage = false } = {}) {
   const brand = hasBrand ? BRAND_KANGAROO_CONSTRAINT : "";
   const scene = sceneRefPromptHint(userCount, { collage, hasBrand });
   const followRef = userCount && !hasBrand
-    ? "Input image is the primary visual reference: preserve its main subject, products, brand colors, icons, and composition. Expand/outpaint only the empty margins to the target aspect ratio; do not crop the source or invent an unrelated scene."
+    ? "Input image is the style and brand reference: keep its palette, logos, key products, and design language. Redesign the layout for the target aspect ratio; content and composition may change as needed."
     : "";
   const bgFill = hasBrand
     ? "Background: bright warm orange-to-gold commercial marketing fill to all four corners (soft glow, festive light accents). Do NOT use dark night streets, deep crimson neon, black voids, or empty gray/white margins."
@@ -77,30 +77,6 @@ export function createModelScopeProvider({
 
     let image = refs.singleImageUri;
     let multiUris = Array.isArray(refs.multiImageUris) ? [...refs.multiImageUris] : [];
-    // Pad refs onto the target-aspect canvas so img2img does not inherit a square (or wrong) ratio.
-    async function padDataUri(dataUri) {
-      if (!dataUri || typeof dataUri !== "string" || !dataUri.startsWith("data:")) return dataUri;
-      const comma = dataUri.indexOf(",");
-      if (comma < 0) return dataUri;
-      const meta = dataUri.slice(0, comma);
-      const raw = Buffer.from(dataUri.slice(comma + 1), "base64");
-      const padded = await padBufferToAspectRatio(raw, width, height);
-      return `data:${padded.mime};base64,${padded.buffer.toString("base64")}`;
-    }
-    if (image) {
-      try {
-        image = await padDataUri(image);
-      } catch (error) {
-        logger.warn?.(`[ModelScope] pad aspect skipped: ${error?.message || error}`);
-      }
-    }
-    if (multiUris.length) {
-      try {
-        multiUris = await Promise.all(multiUris.map((uri) => padDataUri(uri)));
-      } catch (error) {
-        logger.warn?.(`[ModelScope] pad multi aspect skipped: ${error?.message || error}`);
-      }
-    }
 
     const needsImg2Img = requireImg2Img && (shouldUseBrandKangaroo(request) || (Array.isArray(request.referenceImages) && request.referenceImages.length));
     if (needsImg2Img && !image) {
