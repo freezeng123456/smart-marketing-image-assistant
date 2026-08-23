@@ -1,5 +1,3 @@
-import { RATIO_OPTIONS } from "./constants.js";
-
 export function uid(prefix = "id") {
   if (globalThis.crypto?.randomUUID) return `${prefix}-${crypto.randomUUID()}`;
   return `${prefix}-${Date.now()}-${Math.random().toString(36).slice(2, 10)}`;
@@ -35,14 +33,6 @@ export function truncate(value, max = 42) {
   return text.length > max ? `${text.slice(0, max)}…` : text;
 }
 
-export function buildSize(ratio, customWidth, customHeight) {
-  if (ratio === "custom") {
-    const width = clamp(Math.round(customWidth), 320, 4096);
-    const height = clamp(Math.round(customHeight), 320, 4096);
-    return `${width}x${height}`;
-  }
-  return RATIO_OPTIONS.find((item) => item.value === ratio)?.size || "1080x1920";
-}
 
 export function getRuntimeConfig() {
   const config = globalThis.__MARKETING_ASSISTANT_CONFIG__ || {};

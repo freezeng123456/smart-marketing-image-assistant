@@ -1,20 +1,10 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import {
-  buildSize,
   validateMarketingPrompt,
   deriveTitle,
   uniqueBy
 } from "../src/utils.js";
-
-test("default ratio maps to an explicit pixel size", () => {
-  assert.equal(buildSize("9:16", 1, 1), "1080x1920");
-  assert.equal(buildSize("16:9", 1, 1), "1920x1080");
-});
-
-test("custom size is clamped to the supported range", () => {
-  assert.equal(buildSize("custom", 100, 9000), "320x4096");
-});
 
 test("empty prompt is rejected with the required copy", () => {
   const result = validateMarketingPrompt("   ");

@@ -21,22 +21,6 @@ function buildPrompt(request, { userCount = 0, collage = false } = {}) {
     .join("\n");
 }
 
-
-/** Keep ModelScope gen size modest for stability; output may not match slot pixels exactly. */
-function clampModelGenSize(width, height, maxEdge = 1280) {
-  const w = Math.max(64, Number(width) || 768);
-  const h = Math.max(64, Number(height) || 1024);
-  const long = Math.max(w, h);
-  if (long <= maxEdge) {
-    return { width: Math.round(w / 8) * 8, height: Math.round(h / 8) * 8 };
-  }
-  const scale = maxEdge / long;
-  return {
-    width: Math.max(64, Math.round((w * scale) / 8) * 8),
-    height: Math.max(64, Math.round((h * scale) / 8) * 8)
-  };
-}
-
 function sleep(ms, signal) {
   return new Promise((resolve, reject) => {
     if (signal?.aborted) return reject(signal.reason || new DOMException("Aborted", "AbortError"));

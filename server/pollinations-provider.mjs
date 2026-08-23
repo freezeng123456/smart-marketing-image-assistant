@@ -1,6 +1,5 @@
 import { shouldUseBrandKangaroo, BRAND_KANGAROO_CONSTRAINT } from "./brand-policy.mjs";
 import { aspectPromptFromRequest, resolveAspectRatio, sizeForAspectRatio } from "./aspect-ratio.mjs";
-import { normalizeModelSize } from "./cloudflare-provider.mjs";
 
 const DEFAULT_BASE = "https://image.pollinations.ai/prompt";
 const AUTH_GENERATIONS = "https://gen.pollinations.ai/v1/images/generations";

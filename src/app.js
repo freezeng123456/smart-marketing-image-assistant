@@ -5,7 +5,6 @@ import {
   RESOURCE_SLOT_OPTIONS,
   BRAND_OPTIONS,
   GENERATION_TYPES,
-  RATIO_OPTIONS,
   IMAGE_COUNTS,
   STYLE_OPTIONS,
   ADJUSTMENT_OPTIONS,
@@ -23,7 +22,6 @@ import {
   escapeHtml,
   formatDate,
   truncate,
-  buildSize,
   validateMarketingPrompt,
   normalizeErrorMessage,
   deriveTitle,
@@ -48,9 +46,7 @@ const els = {
   modelSelect: $("#model-select"),
   modelHint: $("#model-hint"),
   modelExhaustedNote: $("#model-exhausted-note"),
-  ratioOptions: $("#ratio-options"),
   sizePreview: $("#size-preview"),
-  customSizeRow: $("#custom-size-row"),
   slotSummaryCount: $("#slot-summary-count"),
   slotSummaryList: $("#slot-summary-list"),
   slotTags: $("#slot-tags"),
@@ -244,9 +240,6 @@ function brandLabel(value) {
   return BRAND_OPTIONS.find((item) => item.value === value)?.label || value || "无品牌 IP";
 }
 
-function ratioLabel(value) {
-  return RATIO_OPTIONS.find((item) => item.value === value)?.label || value || "—";
-}
 
 
 function gcdInt(a, b) {
@@ -809,7 +802,6 @@ function syncFormToDom() {
   $$('[data-style]').forEach((button) =>
     button.classList.toggle("is-selected", state.form.styles.includes(button.dataset.style))
   );
-  if (els.customSizeRow) els.customSizeRow.hidden = true;
   renderModelSelect();
   updateSizePreview();
   updateSummary();
@@ -996,14 +988,9 @@ function showErrorState(kind, message) {
 }
 
 function aspectForRatio(ratio) {
-  const map = {
-    "1:1": "1 / 1",
-    "4:3": "4 / 3",
-    "16:9": "16 / 9",
-    "3:4": "3 / 4",
-    "9:16": "9 / 16"
-  };
-  return map[ratio] || "3 / 4";
+  const match = /^(\d+(?:\.\d+)?)\s*:\s*(\d+(?:\.\d+)?)$/.exec(String(ratio || "").trim());
+  if (match) return `${match[1]} / ${match[2]}`;
+  return "9 / 16";
 }
 
 function renderResult() {
@@ -2150,14 +2137,6 @@ function bindEvents() {
     const removeSlot = event.target.closest("[data-remove-slot]");
     if (removeSlot) {
       removeResourceSlot(removeSlot.dataset.removeSlot);
-      return;
-    }
-
-    const ratio = event.target.closest("[data-ratio]");
-    if (ratio) {
-      state.form.ratio = ratio.dataset.ratio;
-      syncFormToDom();
-      persistDraft();
       return;
     }
 

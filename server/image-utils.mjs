@@ -2,8 +2,6 @@ import { execFile } from "node:child_process";
 import { mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { extname, join } from "node:path";
-import { fileURLToPath } from "node:url";
-import { pythonChildEnv } from "./python-env.mjs";
 import { promisify } from "node:util";
 
 const execFileAsync = promisify(execFile);
@@ -120,25 +118,3 @@ export async function resizeForReference(buffer, { mime = inferImageMime(buffer)
     await rm(directory, { recursive: true, force: true });
   }
 }
-
-/** Pad/fit an image onto a canvas matching target WxH (blurred cover + contain). */
-export async function padBufferToAspectRatio(buffer, width, height) {
-  const w = Math.max(64, Math.round(Number(width) || 720));
-  const h = Math.max(64, Math.round(Number(height) || 1280));
-  const dir = await mkdtemp(join(tmpdir(), "pad-aspect-"));
-  try {
-    const inputPath = join(dir, "in.png");
-    const outputPath = join(dir, "out.png");
-    await writeFile(inputPath, buffer);
-    const scriptPath = fileURLToPath(new URL("./pad-aspect.py", import.meta.url));
-    await execFileAsync("python3", [scriptPath, inputPath, outputPath, String(w), String(h)], {
-      env: pythonChildEnv(),
-      maxBuffer: 20 * 1024 * 1024
-    });
-    const out = await readFile(outputPath);
-    return { buffer: out, mime: "image/png", width: w, height: h };
-  } finally {
-    await rm(dir, { recursive: true, force: true }).catch(() => {});
-  }
-}
-

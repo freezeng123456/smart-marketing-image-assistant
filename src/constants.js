@@ -220,14 +220,6 @@ export const RESOURCE_SLOT_OPTIONS = [
   { id: "product-main", label: "商品主图", width: 800, height: 800, tip: "电商主图" }
 ];
 
-export const RATIO_OPTIONS = [
-  { value: "1:1", label: "1:1 方形", size: "1080x1080" },
-  { value: "4:3", label: "4:3 横版", size: "1200x900" },
-  { value: "16:9", label: "16:9 横版", size: "1920x1080" },
-  { value: "3:4", label: "3:4 竖版", size: "900x1200" },
-  { value: "9:16", label: "9:16 竖版", size: "1080x1920" },
-  { value: "custom", label: "自定义尺寸", size: "" }
-];
 
 /** Generic examples for「生成示例参考」modal (not the quick-start cases). */
 export const EXAMPLE_CATEGORIES = [
