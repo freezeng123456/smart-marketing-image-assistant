@@ -1208,7 +1208,7 @@ function normalizeImages(images = []) {
 function buildRequest({ prompt, sessionId = null, contextImageUrl = null, parentVersion = 0 }) {
   const referenceImages = resolveRequestReferenceUrls({ sessionId });
   const isAdjustment = Boolean(sessionId);
-  const session = isAdjustment ? state.sessions.find((item) => item.id === sessionId) : null;
+  const session = isAdjustment ? getSession(sessionId) : null;
   const brandAsset = resolveBrandAssetFromPrompt(prompt, {
     isAdjustment,
     previousBrandAsset: session?.brandAsset || state.form.brandAsset || "none"
