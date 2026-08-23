@@ -20,7 +20,7 @@ function buildPrompt(request, { userCount = 0, collage = false } = {}) {
 }
 
 
-/** Qwen-Image-Edit often yields black/void backgrounds at 1080×1920; keep gen size modest then fitToExactSize. */
+/** Keep ModelScope gen size modest for stability; output may not match slot pixels exactly. */
 function clampModelGenSize(width, height, maxEdge = 1280) {
   const w = Math.max(64, Number(width) || 768);
   const h = Math.max(64, Number(height) || 1024);

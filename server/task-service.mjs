@@ -1,6 +1,6 @@
 import { mkdir, readFile, writeFile } from "node:fs/promises";
 import { join } from "node:path";
-import { imageFileName, fitToExactSize } from "./image-utils.mjs";
+import { imageFileName } from "./image-utils.mjs";
 
 function uid(prefix) {
   return `${prefix}-${crypto.randomUUID()}`;
@@ -116,15 +116,6 @@ export function createTaskService({ provider, runtimeDir, logger = console, task
           );
           let outBuffer = result.buffer;
           let outMime = result.mime;
-          if (slot?.width && slot?.height) {
-            const fitted = await fitToExactSize(outBuffer, {
-              width: slot.width,
-              height: slot.height,
-              mime: outMime
-            });
-            outBuffer = fitted.buffer;
-            outMime = fitted.mime;
-          }
           const fileName = imageFileName(index, outMime);
           await writeFile(join(taskDir, fileName), outBuffer);
           const url = `/generated/${task.taskId}/${fileName}`;

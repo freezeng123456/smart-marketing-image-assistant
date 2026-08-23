@@ -3,7 +3,6 @@ import { mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { extname, join } from "node:path";
 import { promisify } from "node:util";
-import { pythonChildEnv } from "./python-env.mjs";
 
 const execFileAsync = promisify(execFile);
 
@@ -115,76 +114,6 @@ export async function resizeForReference(buffer, { mime = inferImageMime(buffer)
     );
     wrapped.status = 422;
     throw wrapped;
-  } finally {
-    await rm(directory, { recursive: true, force: true });
-  }
-}
-
-/**
- * Cover-crop an image to exact width×height (scale to cover, center crop).
- * Uses Python PIL the same way ref-compose.mjs does. Returns PNG bytes.
- * If width/height are invalid or the buffer is already exact, returns original.
- */
-export async function fitToExactSize(buffer, { width, height, mime } = {}) {
-  const targetW = Number(width);
-  const targetH = Number(height);
-  const inputMime = mime || inferImageMime(buffer, "image/png");
-  if (
-    !Buffer.isBuffer(buffer) ||
-    !Number.isFinite(targetW) ||
-    !Number.isFinite(targetH) ||
-    targetW <= 0 ||
-    targetH <= 0
-  ) {
-    return { buffer, mime: inputMime };
-  }
-
-  const tw = Math.round(targetW);
-  const th = Math.round(targetH);
-  const dims = imageDimensions(buffer);
-  if (dims && dims.width === tw && dims.height === th) {
-    return { buffer, mime: inputMime };
-  }
-
-  const directory = await mkdtemp(join(tmpdir(), "fit-exact-"));
-  const input = join(directory, `input.${extensionForMime(inputMime)}`);
-  const output = join(directory, "output.png");
-  const scriptPath = join(directory, "fit.py");
-  const script = `
-from PIL import Image
-import sys
-inp, out, tw, th = sys.argv[1], sys.argv[2], int(sys.argv[3]), int(sys.argv[4])
-im = Image.open(inp).convert("RGBA")
-# Flatten alpha onto white so transparent pixels never become black RGB void
-bg = Image.new("RGBA", im.size, (255, 255, 255, 255))
-im = Image.alpha_composite(bg, im)
-sw, sh = im.size
-if sw <= 0 or sh <= 0:
-    raise SystemExit("invalid source size")
-scale = max(tw / sw, th / sh)
-nw = max(1, int(round(sw * scale)))
-nh = max(1, int(round(sh * scale)))
-im = im.resize((nw, nh), Image.Resampling.LANCZOS)
-left = max(0, (nw - tw) // 2)
-top = max(0, (nh - th) // 2)
-im = im.crop((left, top, left + tw, top + th))
-if im.size != (tw, th):
-    im = im.resize((tw, th), Image.Resampling.LANCZOS)
-im.convert("RGB").save(out, "PNG", optimize=True)
-`;
-  try {
-    await writeFile(input, buffer);
-    await writeFile(scriptPath, script);
-    await execFileAsync("python3", [scriptPath, input, output, String(tw), String(th)], {
-      env: pythonChildEnv(),
-      timeout: 60000,
-      maxBuffer: 8 * 1024 * 1024
-    });
-    return { buffer: await readFile(output), mime: "image/png" };
-  } catch (error) {
-    // Render Node images may lack Pillow; keep original rather than failing the whole job.
-    console.warn?.("[fitToExactSize]", error?.message || error);
-    return { buffer, mime: inputMime };
   } finally {
     await rm(directory, { recursive: true, force: true });
   }
