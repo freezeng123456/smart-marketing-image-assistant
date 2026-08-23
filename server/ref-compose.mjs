@@ -5,6 +5,7 @@ import { join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { inferImageMime } from "./image-utils.mjs";
 import { shouldUseBrandKangaroo } from "./brand-policy.mjs";
+import { pythonChildEnv } from "./python-env.mjs";
 
 const BRAND_SIDE_PATH = fileURLToPath(new URL("../assets/brand-ip/side-profile-clean.png", import.meta.url));
 const BRAND_STAND_PATH = fileURLToPath(new URL("../assets/brand-ip/meituan-stand-official.png", import.meta.url));
@@ -36,7 +37,7 @@ export async function plateBrandOnWarmBackdrop(brandBuffer, { size = 1024 } = {}
     const outPath = join(dir, "out.png");
     await writeFile(brandPath, brandBuffer);
     const scriptPath = fileURLToPath(new URL("./brand-plate.py", import.meta.url));
-    const result = spawnSync("python3", [scriptPath, brandPath, outPath, String(size)], { encoding: "utf8" });
+    const result = spawnSync("python3", [scriptPath, brandPath, outPath, String(size)], { encoding: "utf8", env: pythonChildEnv() });
     if (result.status !== 0) throw new Error(result.stderr || result.stdout || "brand plate failed");
     const buffer = await readFile(outPath);
     return { buffer, mime: "image/png" };
@@ -92,7 +93,7 @@ flat.convert("RGB").save(out, "PNG", optimize=True)
 `;
     const py = join(dir, "compose.py");
     await writeFile(py, script);
-    const result = spawnSync("python3", [py, brandPath, ...scenePaths, outPath], { encoding: "utf8" });
+    const result = spawnSync("python3", [py, brandPath, ...scenePaths, outPath], { encoding: "utf8", env: pythonChildEnv() });
     if (result.status !== 0) {
       throw new Error(result.stderr || result.stdout || "collage failed");
     }

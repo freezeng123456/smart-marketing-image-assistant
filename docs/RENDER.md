@@ -7,3 +7,5 @@
 5. Env: MODELSCOPE_API_TOKEN, SILICONFLOW_API_KEY, optional CLOUDFLARE_*
 6. URL https://YOUR.onrender.com/?api=functions
 Notes: sleep ~15min idle; cold start 30-60s; ephemeral disk.
+
+Pillow note: build uses python-vendor (see render.yaml).

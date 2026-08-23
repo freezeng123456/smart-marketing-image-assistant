@@ -3,6 +3,7 @@ import { mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { extname, join } from "node:path";
 import { promisify } from "node:util";
+import { pythonChildEnv } from "./python-env.mjs";
 
 const execFileAsync = promisify(execFile);
 
@@ -175,10 +176,15 @@ im.convert("RGB").save(out, "PNG", optimize=True)
     await writeFile(input, buffer);
     await writeFile(scriptPath, script);
     await execFileAsync("python3", [scriptPath, input, output, String(tw), String(th)], {
+      env: pythonChildEnv(),
       timeout: 60000,
       maxBuffer: 8 * 1024 * 1024
     });
     return { buffer: await readFile(output), mime: "image/png" };
+  } catch (error) {
+    // Render Node images may lack Pillow; keep original rather than failing the whole job.
+    console.warn?.("[fitToExactSize]", error?.message || error);
+    return { buffer, mime: inputMime };
   } finally {
     await rm(directory, { recursive: true, force: true });
   }
