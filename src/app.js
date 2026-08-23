@@ -165,6 +165,11 @@ const state = {
   exhaustedChannels: {}
 };
 
+// Migrate leftover draft default off Z-Image-Turbo → Qwen-Image
+if (state.form.modelId === "modelscope-zimage") {
+  state.form.modelId = DEFAULT_FORM.modelId;
+}
+
 // Default marketing prompt: Shopee quick-start copy when empty
 if (!String(state.form.prompt || "").trim()) {
   state.form.prompt = DEFAULT_FORM.prompt;
