@@ -10,7 +10,7 @@ function buildPrompt(request, { hasRef = false, userCount = 0, collage = false }
   const brand = hasBrand ? BRAND_KANGAROO_CONSTRAINT : "";
   const scene = sceneRefPromptHint(userCount, { collage, hasBrand });
   const followRef = userCount && !hasBrand
-    ? "Input image is the primary visual reference: keep its main subject, products, brand colors, icons, and key cues. Recompose into the required aspect-ratio canvas and fill the whole frame."
+    ? "Input image is the primary visual reference: preserve its main subject, products, brand colors, and icons. Expand/outpaint only empty margins to the target aspect ratio; do not crop the source."
     : "";
   const aspect = aspectPromptConstraint(resolveAspectRatio(request));
   return [`Brief: ${original}`, brand, scene, followRef, aspect, `Styles: ${styles}. Full-bleed commercial poster.`].filter(Boolean).join("\n");

@@ -10,7 +10,7 @@ function buildPrompt(request, { userCount = 0, collage = false } = {}) {
   const brand = hasBrand ? BRAND_KANGAROO_CONSTRAINT : "";
   const scene = sceneRefPromptHint(userCount, { collage, hasBrand });
   const followRef = userCount && !hasBrand
-    ? "Input image is the primary visual reference: keep its main subject, products, brand colors, icons, and key composition cues. Recompose into the required aspect-ratio canvas; fill the whole frame; do not invent an unrelated scene or character."
+    ? "Input image is the primary visual reference: preserve its main subject, products, brand colors, icons, and composition. Expand/outpaint only the empty margins to the target aspect ratio; do not crop the source or invent an unrelated scene."
     : "";
   const bgFill = hasBrand
     ? "Background: bright warm orange-to-gold commercial marketing fill to all four corners (soft glow, festive light accents). Do NOT use dark night streets, deep crimson neon, black voids, or empty gray/white margins."

@@ -62,7 +62,13 @@ export function aspectPromptConstraint(ratio) {
   const [aw, ah] = value.split(":").map(Number);
   const orientation =
     aw === ah ? "square" : aw > ah ? "landscape" : "portrait";
-  return `CRITICAL — output canvas aspect ratio MUST be ${value} (${orientation}). Recompose the scene to fill this ${orientation} frame edge-to-edge. Do NOT keep a square layout, letterbox bars, or the reference image's original aspect ratio.`;
+  // Outpaint / expand framing (no crop): keep source intact, only synthesize new margins.
+  return [
+    `Outpaint / expand the image to aspect ratio ${value} (${orientation}).`,
+    "Keep the original subject, products, logos, and all existing content fully intact — do NOT crop, zoom-in, stretch, or cut off any part of the source.",
+    "Only generate new matching background / scene continuation in the empty padded margins to fill the new canvas.",
+    "Extend lighting, colors, and style seamlessly from the original edges; no letterbox bars left in the final image."
+  ].join(" ");
 }
 
 /**
