@@ -63,7 +63,7 @@ export function createTaskService({ provider, runtimeDir, logger = console, task
 
   async function runTask(task) {
     const plannedSlots = Array.isArray(task.request.resourceSlots) && task.request.resourceSlots.length
-      ? task.request.resourceSlots.slice(0, 4)
+      ? task.request.resourceSlots.slice(0, 1)
       : null;
     const plannedCount = plannedSlots ? plannedSlots.length : 1;
     // Img2Img multi-slot runs serially → need N× headroom; light parallel jobs need ~1.35×.

@@ -140,7 +140,7 @@ async function parseUpload(request, origin) {
 function normalizeResourceSlots(raw, fallbackSize = "1080x1920") {
   const list = Array.isArray(raw) ? raw : [];
   const slots = [];
-  for (const item of list.slice(0, 4)) {
+  for (const item of list.slice(0, 1)) {
     const width = Math.round(Number(item?.width) || 0);
     const height = Math.round(Number(item?.height) || 0);
     if (width < 200 || height < 200 || width > 4096 || height > 4096) continue;

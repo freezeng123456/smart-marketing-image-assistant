@@ -136,7 +136,7 @@ const state = {
     brandAsset: "none",
     styles: [],
     selectedSlots: Array.isArray(persistedDraft?.selectedSlots) && persistedDraft.selectedSlots.length
-      ? persistedDraft.selectedSlots
+      ? persistedDraft.selectedSlots.slice(0, 1)
       : structuredClone(DEFAULT_FORM.selectedSlots),
     referenceImages: restoredReferences.map((item) => ({
       ...item,
@@ -383,7 +383,7 @@ function applyDefaultCase(item, { toast = true } = {}) {
   state.form.prompt = item.prompt;
   state.form.ratio = item.ratio || state.form.ratio;
   if (Array.isArray(item.selectedSlots) && item.selectedSlots.length) {
-    state.form.selectedSlots = structuredClone(item.selectedSlots);
+    state.form.selectedSlots = structuredClone(item.selectedSlots).slice(0, 1);
   }
   state.form.modelId = item.modelId || state.form.modelId;
   state.form.brandAsset = item.brandAsset || resolveBrandAssetFromPrompt(item.prompt);
@@ -444,7 +444,7 @@ function slotKey(slot) {
 }
 
 function getSelectedSlots() {
-  const slots = normalizeSlots(state.form.selectedSlots);
+  const slots = normalizeSlots(state.form.selectedSlots).slice(0, 1);
   if (slots.length) return slots;
   return [{ id: "splash", label: "开屏广告", width: 1080, height: 1920 }];
 }
@@ -453,7 +453,7 @@ function renderResourceSlots() {
   const selected = getSelectedSlots();
   state.form.selectedSlots = selected;
   if (els.slotSummaryCount) {
-    els.slotSummaryCount.textContent = `已选 ${selected.length} 个资源位`;
+    els.slotSummaryCount.textContent = `当前资源位`;
   }
   if (els.slotSummaryList) {
     els.slotSummaryList.textContent = selected.map((slot) => `${slot.label} (${slot.width}×${slot.height})`).join("、");
@@ -495,34 +495,23 @@ function renderResourceSlots() {
 function toggleResourceSlot(slotId) {
   const option = RESOURCE_SLOT_OPTIONS.find((item) => item.id === slotId);
   if (!option) return;
-  const selected = getSelectedSlots();
-  const exists = selected.findIndex((slot) => slot.id === option.id && slot.width === option.width && slot.height === option.height);
-  if (exists >= 0) {
-    if (selected.length === 1) {
-      showToast("至少保留一个资源位尺寸。", "error");
-      return;
-    }
-    selected.splice(exists, 1);
-  } else {
-    if (selected.length >= 4) {
-      showToast("一次最多选择 4 个资源位。", "error");
-      return;
-    }
-    selected.push({ id: option.id, label: option.label, width: option.width, height: option.height });
+  const current = getSelectedSlots()[0];
+  if (current && current.id === option.id && current.width === option.width && current.height === option.height) {
+    // Single-select: keep the active slot; do not allow empty selection.
+    return;
   }
-  state.form.selectedSlots = selected;
+  state.form.selectedSlots = [{ id: option.id, label: option.label, width: option.width, height: option.height }];
   renderResourceSlots();
   updateSummary();
   persistDraft();
 }
 
 function removeResourceSlot(key) {
-  const selected = getSelectedSlots().filter((slot) => slotKey(slot) !== key);
-  if (!selected.length) {
-    showToast("至少保留一个资源位尺寸。", "error");
-    return;
-  }
-  state.form.selectedSlots = selected;
+  const current = getSelectedSlots()[0];
+  if (!current || slotKey(current) !== key) return;
+  // Single-select: clearing the chip falls back to the default splash slot.
+  state.form.selectedSlots = [{ id: "splash", label: "开屏广告", width: 1080, height: 1920 }];
+  showToast("已恢复默认开屏广告尺寸。", "success");
   renderResourceSlots();
   updateSummary();
   persistDraft();
@@ -535,24 +524,19 @@ function addCustomResourceSlot() {
     showToast("自定义尺寸需在 200–4096 px 之间。", "error");
     return;
   }
-  const selected = getSelectedSlots();
-  if (selected.length >= 4) {
-    showToast("一次最多选择 4 个资源位。", "error");
-    return;
-  }
   const id = `custom-${width}x${height}`;
-  if (selected.some((slot) => slot.width === width && slot.height === height)) {
-    showToast("该尺寸已添加。", "error");
+  const current = getSelectedSlots()[0];
+  if (current && current.width === width && current.height === height) {
+    showToast("当前已是该尺寸。", "error");
     return;
   }
-  selected.push({ id, label: "自定义", width, height });
-  state.form.selectedSlots = selected;
+  state.form.selectedSlots = [{ id, label: "自定义", width, height }];
   state.form.customWidth = width;
   state.form.customHeight = height;
   renderResourceSlots();
   updateSummary();
   persistDraft();
-  showToast(`已添加自定义 ${width}×${height}。`, "success");
+  showToast(`已切换为自定义 ${width}×${height}。`, "success");
 }
 
 function renderStaticControls() {
