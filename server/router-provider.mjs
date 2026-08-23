@@ -1,5 +1,4 @@
 import { DEFAULT_MODEL_ID, findModel, isQuotaError, resolveModelForRequest } from "./model-catalog.mjs";
-
 export function createRouterProvider({
   providersByChannel,
   defaultChain,

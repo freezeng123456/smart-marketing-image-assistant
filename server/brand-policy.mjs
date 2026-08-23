@@ -9,10 +9,10 @@ const MEITUAN_HINT = /美团|美團|meituan|品牌袋鼠/i;
 
 /** Full Meituan yellow kangaroo identity lock — do not shorten when injecting. */
 export const BRAND_KANGAROO_CONSTRAINT =
-  "Hero must match the brand kangaroo reference exactly: 美团黄色袋鼠 / Meituan yellow kangaroo IP, side or 3/4 profile, bright yellow smooth vinyl, cream belly pouch, long rounded ears, small black oval eye separate from solid black oval nose, short stubby limbs, thick all-yellow tapering tail, matte vinyl toy style. Keep the same mascot identity as the reference; change only pose and scene for the campaign. Do not redraw as a different animal or cartoon.";
+  "Hero must match the brand kangaroo reference exactly: Meituan yellow kangaroo IP, side or 3/4 profile, bright yellow smooth vinyl, cream belly pouch, long rounded ears, small black oval eye separate from solid black oval nose, short stubby limbs, thick all-yellow tapering tail, matte vinyl toy style. Keep the same mascot identity as the reference; change only pose and scene for the campaign. Do not redraw as a different animal or cartoon.";
 
 export const BRAND_KANGAROO_CONSTRAINT_SHORT =
-  "Hero: 美团袋鼠 / Meituan yellow kangaroo IP from the reference images. Look: side or 3/4 profile; bright yellow smooth vinyl; cream belly pouch; long rounded ears; small black oval eye; separate black oval nose on the snout; short stubby limbs; thick all-yellow tail. Keep the same mascot identity as the references; change pose and scene to fit the campaign.";
+  "Hero: Meituan yellow kangaroo IP from the reference images. Look: side or 3/4 profile; bright yellow smooth vinyl; cream belly pouch; long rounded ears; small black oval eye; separate black oval nose on the snout; short stubby limbs; thick all-yellow tail. Keep the same mascot identity as the references; change pose and scene to fit the campaign.";
 
 export function promptMentionsBrandIp(prompt = "") {
   return MEITUAN_HINT.test(String(prompt || ""));

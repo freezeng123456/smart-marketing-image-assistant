@@ -1,4 +1,5 @@
 import { shouldUseBrandKangaroo, BRAND_KANGAROO_CONSTRAINT } from "./brand-policy.mjs";
+import { withEnglishModelPrompt } from "./model-brief-en.mjs";
 import { inferImageMime } from "./image-utils.mjs";
 import { resolveBrandAndUserRefs, sceneRefPromptHint } from "./ref-compose.mjs";
 
@@ -60,6 +61,7 @@ export function createSiliconFlowProvider({
   if (typeof fetchImpl !== "function") throw new Error("A fetch implementation is required.");
 
   async function generate(request, index = 0, { signal } = {}) {
+    request = await withEnglishModelPrompt(request, { fetchImpl, logger });
     const activeModel = request.modelOverride || model;
     const refs = await resolveBrandAndUserRefs(request, { loadImageSource, signal, logger });
     // Always prefer brand (+ collage with user refs). Never replace brand IP with user product photo alone.

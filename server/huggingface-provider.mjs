@@ -1,4 +1,5 @@
 import { shouldUseBrandKangaroo, BRAND_KANGAROO_CONSTRAINT } from "./brand-policy.mjs";
+import { withEnglishModelPrompt } from "./model-brief-en.mjs";
 function buildPrompt(request) {
   const styles = Array.isArray(request.styles) && request.styles.length ? request.styles.join(", ") : "commercial marketing";
   const original = String(request.prompt || "").trim();
@@ -17,6 +18,7 @@ export function createHuggingFaceProvider({
   if (typeof fetchImpl !== "function") throw new Error("A fetch implementation is required.");
 
   async function generate(request, index = 0, { signal } = {}) {
+    request = await withEnglishModelPrompt(request, { fetchImpl, logger });
     const prompt = buildPrompt(request);
     const url = `${apiBase.replace(/\/$/, "")}/${model}`;
     logger.info?.(`[HF] generating via ${model}`);
