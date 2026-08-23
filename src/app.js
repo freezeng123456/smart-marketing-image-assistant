@@ -356,12 +356,13 @@ function renderDefaultCases() {
   if (!els.defaultCases) return;
   els.defaultCases.innerHTML = DEFAULT_CASES.map((item) => {
     const thumb =
+      item.thumbUrl ||
       item.referenceImages?.[0]?.previewUrl ||
-      (item.id === "meituan-kangaroo" ? "/assets/brand-kangaroo.png" : "");
+      (item.id === "meituan-kangaroo" ? "/assets/demo/meituan-kangaroo-result-thumb.webp?v=6" : "");
     const thumbClass = item.id === "meituan-kangaroo" ? "default-case-thumb is-kangaroo" : "default-case-thumb";
     return `
       <button class="default-case-card ${state.selectedCaseId === item.id ? "is-selected" : ""}" type="button" data-default-case="${escapeHtml(item.id)}">
-        <img class="${thumbClass}" src="${escapeHtml(thumb)}" alt="${escapeHtml(item.label)}" />
+        <img class="${thumbClass}" src="${escapeHtml(thumb)}" alt="${escapeHtml(item.label)}" loading="lazy" decoding="async" />
         <div class="default-case-meta">
           <strong>${escapeHtml(item.label)}</strong>
           <span>${escapeHtml(item.blurb || "")}</span>
@@ -1668,7 +1669,7 @@ function renderHistoryCard(session) {
   return `
     <article class="history-card">
       <div class="history-thumb">
-        ${image ? `<img src="${escapeHtml(image.url)}" alt="${escapeHtml(session.title || "营销创作")}" loading="lazy" />` : `<div class="history-thumb-placeholder">${escapeHtml(session.lastError || "任务尚无可展示图片")}</div>`}
+        ${image ? `<img src="${escapeHtml(image.thumbUrl || image.url)}" alt="${escapeHtml(session.title || "营销创作")}" loading="lazy" decoding="async" />` : `<div class="history-thumb-placeholder">${escapeHtml(session.lastError || "任务尚无可展示图片")}</div>`}
         <span class="status-badge history-status-float ${statusClass(session.status)}">${escapeHtml(STATUS_LABELS[session.status] || session.status || "未知")}</span>
         <span class="history-version-float">V${Number(session.currentVersion || 0)} · ${session.versions?.length || 0} 个版本</span>
       </div>
@@ -1743,7 +1744,7 @@ function renderPortfolio() {
     .map(
       ({ session, version, image, category }) => `
         <article class="portfolio-card">
-          <div class="portfolio-thumb"><img src="${escapeHtml(image.url)}" alt="${escapeHtml(session.title)}" loading="lazy" /></div>
+          <div class="portfolio-thumb"><img src="${escapeHtml(image.thumbUrl || image.url)}" alt="${escapeHtml(session.title)}" loading="lazy" decoding="async" /></div>
           <div class="portfolio-body">
             <h3>${escapeHtml(session.title || "营销作品")}</h3>
             <p>${image.favorite ? "已收藏 · " : ""}${escapeHtml(category)} · V${version.version} · ${escapeHtml(formatDate(version.createdAt, false))}</p>

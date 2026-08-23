@@ -13,13 +13,14 @@ export const DEFAULT_CASES = [
     selectedSlots: [{ id: "splash", label: "开屏广告", width: 1080, height: 1920 }],
     modelId: "modelscope-qwen-edit",
     brandAsset: "none",
-    resultUrl: "/assets/demo/shopee-result.png?v=2",
+    resultUrl: "/assets/demo/shopee-result.webp?v=6",
+    thumbUrl: "/assets/demo/shopee-result-thumb.webp?v=6",
     referenceImages: [
       {
         id: "demo-shopee-ref",
         fileName: "shopee-super-shopping.png",
-        url: "/assets/demo/shopee-super-shopping.png",
-        previewUrl: "/assets/demo/shopee-super-shopping.png",
+        url: "/assets/demo/shopee-super-shopping.webp?v=6",
+        previewUrl: "/assets/demo/shopee-super-shopping-thumb.webp?v=6",
         status: "ready"
       }
     ]
@@ -36,7 +37,8 @@ export const DEFAULT_CASES = [
     selectedSlots: [{ id: "splash", label: "开屏广告", width: 1080, height: 1920 }],
     modelId: "modelscope-qwen-edit",
     brandAsset: "brand-kangaroo",
-    resultUrl: "/assets/demo/meituan-kangaroo-result.png?v=5",
+    resultUrl: "/assets/demo/meituan-kangaroo-result.webp?v=6",
+    thumbUrl: "/assets/demo/meituan-kangaroo-result-thumb.webp?v=6",
     referenceImages: []
   }
 ];
@@ -48,6 +50,7 @@ export function buildDemoSessions(now = new Date().toISOString()) {
     const image = {
       id: `${item.sessionId}-image-1`,
       url: item.resultUrl,
+      thumbUrl: item.thumbUrl || item.resultUrl,
       status: "FINISH",
       prompt: item.prompt,
       model: item.modelId === "modelscope-qwen-edit" ? "modelscope/Qwen/Qwen-Image-Edit" : item.modelId,
