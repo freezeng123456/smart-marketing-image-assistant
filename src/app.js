@@ -622,7 +622,10 @@ function resolveRequestReferenceUrls({ sessionId = null } = {}) {
     .filter(Boolean);
   if (fromForm.length) return fromForm.slice(0, 4);
 
-  const session = sessionId ? getSession(sessionId) : getSession();
+  // Only fall back to a session's stored refs for explicit continue-edit / adjustment.
+  // Fresh generates must NOT inherit leftover refs from the previous case (e.g. Shopee).
+  if (!sessionId) return [];
+  const session = getSession(sessionId);
   if (!session) return [];
   const version = getCurrentVersion(session);
   const sources =
@@ -1342,17 +1345,16 @@ async function startGeneration({
   }
   els.promptError.textContent = "";
 
-  const request = buildRequest({ prompt, sessionId, contextImageUrl, parentVersion });
   const isAdjustment = Boolean(sessionId);
   state.partialImages = [];
   state.pollErrors = 0;
-  // Fresh generate (not continue-edit) must detach from the previous session/result
-  // before any scroll/render, otherwise scrollToSection → renderStageFromState
-  // briefly paints the old result while the button already says 生成中.
+  // Fresh generate must detach from the previous session BEFORE buildRequest,
+  // otherwise empty form refs still fall back to the last case's Shopee images.
   if (!isAdjustment) {
     state.currentSessionId = null;
     state.editingImageUrl = null;
   }
+  const request = buildRequest({ prompt, sessionId, contextImageUrl, parentVersion });
   state.activeTask = {
     sessionId: sessionId || null,
     taskId: null,
