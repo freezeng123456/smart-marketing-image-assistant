@@ -131,7 +131,9 @@ img {
 
 .brand-copy strong {
   font-size: 18px;
+  font-weight: 750;
   letter-spacing: 0.02em;
+  color: var(--text);
 }
 
 .brand-copy small {
