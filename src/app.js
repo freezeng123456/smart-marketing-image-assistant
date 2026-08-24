@@ -401,6 +401,26 @@ function renderDefaultCases() {
   }).join("");
 }
 
+
+function applyTextExample(item, { toastPrefix = "已填入" } = {}) {
+  if (!item?.prompt) return;
+  state.selectedCaseId = null;
+  state.form.prompt = item.prompt;
+  state.form.brandAsset = resolveBrandAssetFromPrompt(item.prompt);
+  // Text-only examples must not keep the previous case's reference images (e.g. Shopee).
+  state.form.referenceImages = normalizeFormReferences(item.referenceImages || []);
+  if (els.prompt) {
+    els.prompt.value = item.prompt;
+    els.promptCount.textContent = `${item.prompt.length} / 3000`;
+    els.promptError.textContent = "";
+  }
+  syncFormToDom();
+  renderDefaultCases();
+  updateSummary();
+  persistDraft();
+  showToast(`${toastPrefix}「${item.label}」示例描述。`, "success");
+}
+
 function applyDefaultCase(item, { toast = true } = {}) {
   if (!item) return;
   state.selectedCaseId = item.id;
@@ -411,7 +431,10 @@ function applyDefaultCase(item, { toast = true } = {}) {
   }
   state.form.modelId = item.modelId || state.form.modelId;
   state.form.brandAsset = item.brandAsset || resolveBrandAssetFromPrompt(item.prompt);
-  state.form.referenceImages = normalizeFormReferences(item.referenceImages || []);
+  // Always replace refs from the case definition (empty array clears prior Shopee refs).
+  state.form.referenceImages = normalizeFormReferences(
+    Object.prototype.hasOwnProperty.call(item, "referenceImages") ? item.referenceImages || [] : []
+  );
   if (els.prompt) {
     els.prompt.value = item.prompt;
     els.promptCount.textContent = `${item.prompt.length} / 3000`;
@@ -2225,13 +2248,8 @@ function bindEvents() {
     if (template) {
       const item = TEMPLATE_OPTIONS.find((entry) => entry.id === template.dataset.templateId);
       if (item) {
-        state.form.prompt = item.prompt;
-        els.prompt.value = item.prompt;
-        els.promptCount.textContent = `${item.prompt.length} / 3000`;
-        els.promptError.textContent = "";
-        persistDraft();
-        els.prompt.focus();
-        showToast(`已填入“${item.label}”示例需求。`, "success");
+        applyTextExample(item, { toastPrefix: "已填入" });
+        els.prompt?.focus();
       }
       return;
     }
@@ -2398,19 +2416,10 @@ function bindEvents() {
         EXAMPLE_CATEGORIES.find((entry) => entry.id === useExample.dataset.useExample) ||
         TEMPLATE_OPTIONS.find((entry) => entry.id === useExample.dataset.useExample);
       if (item) {
-        state.form.prompt = item.prompt;
-        if (els.prompt) {
-          els.prompt.value = item.prompt;
-          els.promptCount.textContent = `${item.prompt.length} / 3000`;
-          els.promptError.textContent = "";
-        }
-        syncFormToDom();
-        updateSummary();
-        persistDraft();
+        applyTextExample(item);
         closeModal(els.exampleModal);
         setView("create");
         els.prompt?.focus();
-        showToast(`已填入「${item.label}」示例描述。`, "success");
       }
       return;
     }
