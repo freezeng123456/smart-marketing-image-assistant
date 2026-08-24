@@ -1,6 +1,6 @@
 import http from "node:http";
 import { createReadStream } from "node:fs";
-import { mkdir, stat, writeFile } from "node:fs/promises";
+import { appendFile, mkdir, stat, writeFile } from "node:fs/promises";
 import { extname, join, normalize, relative } from "node:path";
 import { createCloudflareProvider } from "./cloudflare-provider.mjs";
 import { createPollinationsProvider, createFailoverProvider } from "./pollinations-provider.mjs";
@@ -53,6 +53,25 @@ function safePath(root, pathname) {
   const rel = relative(root, candidate);
   if (rel.startsWith("..") || rel.includes(`..${process.platform === "win32" ? "\\" : "/"}`)) return null;
   return candidate;
+}
+
+
+function clientIp(request) {
+  const forwarded = String(request.headers["x-forwarded-for"] || "")
+    .split(",")
+    .map((part) => part.trim())
+    .filter(Boolean);
+  if (forwarded.length) return forwarded[0];
+  const realIp = String(request.headers["x-real-ip"] || "").trim();
+  if (realIp) return realIp;
+  const cf = String(request.headers["cf-connecting-ip"] || "").trim();
+  if (cf) return cf;
+  return request.socket?.remoteAddress || "";
+}
+
+function accessLogLine({ at, method, path, ip, status, ms, ua }) {
+  const safeUa = String(ua || "").replace(/[\r\n\t]+/g, " ").slice(0, 180);
+  return `[access] ${at} ${method} ${path} ip=${ip || "-"} status=${status} ${ms}ms ua="${safeUa}"`;
 }
 
 function writeJson(response, status, payload) {
@@ -295,11 +314,41 @@ export async function createMarketingServer({
   await taskService?.init();
 
 
+  const accessLogPath = join(runtimeDir, "access.log");
+  async function recordAccess(entry) {
+    const line = accessLogLine(entry);
+    logger.info?.(line);
+    try {
+      await appendFile(accessLogPath, `${line}\n`, "utf8");
+    } catch {
+      // Disk may be read-only or full on some hosts; console log above is enough.
+    }
+  }
+
   const server = http.createServer(async (request, response) => {
     const method = request.method || "GET";
     const origin = publicOrigin(request, port);
     const url = new URL(request.url || "/", origin);
     const pathname = decodeURIComponent(url.pathname);
+    const startedAt = Date.now();
+    const ip = clientIp(request);
+    const ua = request.headers["user-agent"] || "";
+    let logged = false;
+    const finishAccessLog = () => {
+      if (logged) return;
+      logged = true;
+      void recordAccess({
+        at: new Date().toISOString(),
+        method,
+        path: `${pathname}${url.search || ""}`,
+        ip,
+        status: response.statusCode || 0,
+        ms: Date.now() - startedAt,
+        ua
+      });
+    };
+    response.on("finish", finishAccessLog);
+    response.on("close", finishAccessLog);
 
     try {
       if (method === "GET" && pathname === "/functions/health") {
