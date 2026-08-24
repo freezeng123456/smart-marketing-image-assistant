@@ -404,25 +404,39 @@ function renderDefaultCases() {
 
 function applyTextExample(item, { toastPrefix = "已填入" } = {}) {
   if (!item?.prompt) return;
+  if (state.activeTask) {
+    showToast("当前任务正在生成，请先取消或等待完成后再切换示例。", "error");
+    return;
+  }
   state.selectedCaseId = null;
   state.form.prompt = item.prompt;
   state.form.brandAsset = resolveBrandAssetFromPrompt(item.prompt);
   // Text-only examples must not keep the previous case's reference images (e.g. Shopee).
   state.form.referenceImages = normalizeFormReferences(item.referenceImages || []);
+  // Detach previous session so the result panel does not keep showing the last image.
+  state.currentSessionId = null;
+  state.editingImageUrl = null;
+  state.partialImages = [];
   if (els.prompt) {
     els.prompt.value = item.prompt;
     els.promptCount.textContent = `${item.prompt.length} / 3000`;
     els.promptError.textContent = "";
   }
+  if (els.adjustmentInput) els.adjustmentInput.value = "";
   syncFormToDom();
   renderDefaultCases();
   updateSummary();
   persistDraft();
+  showStage("empty");
   showToast(`${toastPrefix}「${item.label}」示例描述。`, "success");
 }
 
 function applyDefaultCase(item, { toast = true } = {}) {
   if (!item) return;
+  if (state.activeTask) {
+    showToast("当前任务正在生成，请先取消或等待完成后再切换案例。", "error");
+    return;
+  }
   state.selectedCaseId = item.id;
   state.form.prompt = item.prompt;
   state.form.ratio = item.ratio || state.form.ratio;
@@ -1332,8 +1346,13 @@ async function startGeneration({
   const isAdjustment = Boolean(sessionId);
   state.partialImages = [];
   state.pollErrors = 0;
-  showStage("progress");
-  scrollToSection("create", { behavior: "smooth", focusResult: true });
+  // Fresh generate (not continue-edit) must detach from the previous session/result
+  // before any scroll/render, otherwise scrollToSection → renderStageFromState
+  // briefly paints the old result while the button already says 生成中.
+  if (!isAdjustment) {
+    state.currentSessionId = null;
+    state.editingImageUrl = null;
+  }
   state.activeTask = {
     sessionId: sessionId || null,
     taskId: null,
@@ -1347,6 +1366,12 @@ async function startGeneration({
     parentVersion,
     startedAt: new Date().toISOString()
   };
+  store.saveActiveTask(state.activeTask);
+  showStage("progress");
+  renderProgress();
+  scrollToSection("create", { behavior: "smooth", focusResult: true });
+  // scrollToSection may call renderStageFromState; keep progress visible.
+  showStage("progress");
   renderProgress();
 
   try {
